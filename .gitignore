@@ -1,0 +1,32 @@
+# CMake files
+.cmake/
+.cache/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+build/
+Makefile
+compile_commands.json
+
+# Build artifacts
+../astra-archive2/build/
+out/
+*.slo
+*.lo
+*.o
+*.obj
+gen/
+
+# Generated files by ANTLR
+**/antlr4-generated/
+**/*.interp
+**/*.tokens
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
