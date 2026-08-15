@@ -1,6 +1,10 @@
 #pragma once
 
 namespace astra::ast {
+/// The kind of every AST node.
+/// The order matters. The base classes `Expr`, `Statement`, `Declaration` and
+/// `Type` implement `classof` as a contiguous range test over `NodeKind`, so
+/// related kinds must stay grouped when new nodes are added.
 enum class NodeKind {
     Program,
     TopLevelObject,

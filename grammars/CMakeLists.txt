@@ -20,12 +20,24 @@ include_directories(
         ${ANTLR_AstraParser_OUTPUT_DIR}
 )
 
+# ANTLR-generated code uses dynamic_cast, which requires RTTI. It is off
+# project-wide by default (see the top-level CMakeLists.txt).
 add_library(astra-lexer
         ${ANTLR_AstraLexer_CXX_OUTPUTS}
 )
 
 add_library(astra-parser
         ${ANTLR_AstraParser_CXX_OUTPUTS}
+)
+
+target_compile_options(astra-lexer
+        PRIVATE
+        -frtti
+)
+
+target_compile_options(astra-parser
+        PRIVATE
+        -frtti
 )
 
 target_include_directories(astra-lexer PUBLIC
@@ -37,10 +49,10 @@ target_include_directories(astra-parser PUBLIC
 )
 
 target_link_libraries(astra-parser PUBLIC
-        antlr4_static_runtime
+        antlr4_static
 )
 
 target_link_libraries(astra-lexer PUBLIC
-        antlr4_static_runtime
+        antlr4_static
 )
 

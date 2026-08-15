@@ -10,7 +10,12 @@
 namespace astra::ast {
 struct Type;
 
+/// Base class of all expressions.
+/// The kinds of all expressions form the contiguous range
+/// `NullLiteral`..`CollectionExpr`, which `classof` relies on.
 struct Expr : ASTNode {
+  /// Whether the expression value is a compile-time constant.
+  /// Only literal constants set this for now.
   bool IsConst = false;
   static bool classof(const ASTNode *Node) {
     auto K = Node->getKind();
@@ -69,6 +74,8 @@ struct VarExpr : Expr {
   }
 };
 
+/// The operators of `UnaryExpr`, `BinaryExpr` and `AssignmentStmt`.
+/// `ASTDumper::getOpSymbol` maps each one to its source spelling.
 enum Op {
   Add,
   Sub,
@@ -197,7 +204,9 @@ struct IndexExpr : Expr {
 
 struct MemberExpr : Expr {
   Expr *Base = nullptr;
+  /// The name of the accessed member.
   llvm::StringRef Member;
+  /// Whether the access uses the `?.` operator.
   bool NullSafe = false;
 
   MemberExpr() { Kind = NodeKind::MemberExpr; }
@@ -219,6 +228,7 @@ struct IsExpr : Expr {
 struct AsExpr : Expr {
   Expr *Operand = nullptr;
   Type *TargetType = nullptr;
+  /// Whether the cast uses `as?` instead of `as`.
   bool NullSafe = false;
 
   AsExpr() { Kind = NodeKind::AsExpr; }

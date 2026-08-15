@@ -10,9 +10,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# RTTI is off project-wide (LLVM-style). This keeps new modules aligned with
+# the -fno-rtti-built LLVM libraries.
+# The ANTLR-generated parser/lexer code requires RTTI and re-enables it
+# in grammars/CMakeLists.txt.
+add_compile_options(-fno-rtti)
+
 # Options
 option(BUILD_TOOLS "Build tools" ON)
 option(BUILD_TESTS "Build tests" ON)
+
+# CTest
+include(CTest)
 
 # Include paths
 include_directories(${PROJECT_SOURCE_DIR}/include)
@@ -39,22 +48,22 @@ Include(FetchContent)
 
 # Catch2
 if (BUILD_TESTS)
-    FetchContent_Declare(
+  FetchContent_Declare(
             Catch2
             GIT_REPOSITORY https://github.com/catchorg/Catch2.git
             GIT_TAG v3.8.1 # or a later release
     )
-    FetchContent_MakeAvailable(Catch2)
+  FetchContent_MakeAvailable(Catch2)
 endif ()
 
 add_subdirectory(grammars)
 add_subdirectory(src)
 if (BUILD_TOOLS)
-    add_subdirectory(tools)
+  add_subdirectory(tools)
 endif ()
 
 if (BUILD_TESTS)
-    add_subdirectory(tests)
+  add_subdirectory(tests)
 endif ()
 
 # format

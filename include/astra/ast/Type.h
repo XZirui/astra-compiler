@@ -32,7 +32,9 @@ struct BuiltinType : Type {
 };
 
 struct ArrayType : Type {
+  /// The element type, possibly another `ArrayType` for nested arrays.
   Type *ElementType = nullptr;
+  /// The size expression written between the brackets.
   Expr *Size = nullptr;
   ArrayType() { Kind = NodeKind::ArrayType; }
   static bool classof(const ASTNode *Node) {
@@ -41,6 +43,8 @@ struct ArrayType : Type {
 };
 
 struct FunctionType : Type {
+  /// The parameter types in order. Empty for a function type written without
+  /// a parameter list.
   llvm::SmallVector<Type *, 2> Parameters;
   Type *ReturnType = nullptr;
   FunctionType() { Kind = NodeKind::FunctionType; }

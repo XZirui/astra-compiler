@@ -6,28 +6,37 @@
 #include <llvm/Support/Allocator.h>
 #include <llvm/Support/SourceMgr.h>
 
+#include <new>
+
 namespace astra::ast {
+/// The memory arena that owns all AST nodes and identifiers of one parse.
+/// Nothing is freed individually. The caller manages the context's lifetime,
+/// and it must outlive the AST built from it.
 class ASTContext : public llvm::RefCountedBase<ASTContext> {
+  /// The arena backing every allocation the context hands out.
   mutable llvm::BumpPtrAllocator BumpAlloc;
   llvm::SourceMgr &SourceMgr;
-  llvm::StringMap<IdentifierInfo *> Idenfitifers;
+  /// The interning table of identifiers, keyed by their spelling.
+  llvm::StringMap<IdentifierInfo *> Identifiers;
 
 public:
-  /// Need a valid constructor, whose lifecycle is managed by the caller.
+  /// Construct a context for `SrcMgr`. The context is owned by the caller,
+  /// which is also responsible for destroying it.
   explicit ASTContext(llvm::SourceMgr &SrcMgr) : SourceMgr(SrcMgr) {}
 
-  /// Get or create an IdentifierInfo.
-  /// @param Name The string of idenfitifer, must points to stable memory.
-  /// @param IsKeyword (optional) Whether this idenfitifer is a keyword.
+  /// Get the interned `IdentifierInfo` for `Name`, creating it on first use.
+  /// @param Name The identifier text. It must point to stable memory, e.g.
+  ///             the source buffer or a string literal.
+  /// @param IsKeyword Whether the identifier is a keyword. Defaults to false.
   IdentifierInfo *getIdentifier(llvm::StringRef Name, bool IsKeyword = false) {
-    auto It = Idenfitifers.find(Name);
-    if (It != Idenfitifers.end()) {
+    auto It = Identifiers.find(Name);
+    if (It != Identifiers.end()) {
       return It->second;
     }
 
     void *Mem = allocate(sizeof(IdentifierInfo), alignof(IdentifierInfo));
     auto *Info = new (Mem) IdentifierInfo(Name, IsKeyword);
-    Idenfitifers[Name] = Info;
+    Identifiers[Name] = Info;
     return Info;
   }
 
@@ -35,12 +44,22 @@ public:
 
   llvm::BumpPtrAllocator &getAllocator() const { return BumpAlloc; }
 
+  /// Allocate `Size` bytes of uninitialized storage from the arena, aligned
+  /// to at least `Align` bytes. Individual allocations are never freed.
   void *allocate(size_t Size, unsigned Align = 8) const {
     return BumpAlloc.Allocate(Size, Align);
   }
 
+  /// Allocate storage for `Num` objects of type `T` and default-construct
+  /// them (placement new). The objects are never destroyed individually. All
+  /// memory is reclaimed when the context dies.
   template <typename T> T *allocate(size_t Num = 1) const {
-    return static_cast<T *>(allocate(Num * sizeof(T), alignof(T)));
+    void *Mem = allocate(Num * sizeof(T), alignof(T));
+    auto *Result = static_cast<T *>(Mem);
+    for (size_t I = 0; I < Num; ++I) {
+      new (Result + I) T();
+    }
+    return Result;
   }
 };
 } // namespace astra::ast

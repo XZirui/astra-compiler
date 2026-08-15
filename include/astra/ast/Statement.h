@@ -39,6 +39,9 @@ struct ExprStmt : Statement {
 
 struct AssignmentStmt : Statement {
   Expr *LHS = nullptr;
+  /// The assignment operator. Compound assignments such as `+=` fold into
+  /// the plain operator (`ast::Op::Add`) for now, so codegen cannot
+  /// distinguish them.
   Op Operator = Assignment;
   Expr *RHS = nullptr;
   AssignmentStmt() { Kind = NodeKind::AssignmentStmt; }
@@ -50,6 +53,7 @@ struct AssignmentStmt : Statement {
 struct IfStmt : Statement {
   Expr *Condition = nullptr;
   Statement *Then = nullptr;
+  /// Either a nested `IfStmt` for `else if` or a plain `Block`.
   Statement *Else = nullptr;
   IfStmt() { Kind = NodeKind::IfStmt; }
   static bool classof(const ASTNode *Node) {
@@ -58,6 +62,8 @@ struct IfStmt : Statement {
 };
 
 struct ForStmt : Statement {
+  /// The declarations of the init part. Empty when the `for` has no init
+  /// declaration.
   llvm::SmallVector<Declaration *> InitStmts;
   Expr *Condition = nullptr;
   Statement *Update = nullptr;
@@ -69,6 +75,7 @@ struct ForStmt : Statement {
 };
 
 struct ForEachStmt : Statement {
+  /// The name of the loop variable.
   llvm::StringRef VarName;
   Expr *Scope = nullptr;
   Block *Body = nullptr;

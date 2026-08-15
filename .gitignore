@@ -30,3 +30,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
+
+# AI assistant
+.claude/
+CLAUDE.md

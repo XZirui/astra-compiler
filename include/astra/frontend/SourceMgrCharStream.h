@@ -1,16 +1,26 @@
 #pragma once
 
 #include "CharStream.h"
+#include <algorithm>
 #include <llvm/Support/SourceMgr.h>
 
+// The included C headers define the macro `EOF`. ANTLR uses the same name for
+// its end-of-input sentinel, so undefine the macro and let `EOF` denote
+// `IntStream::EOF`.
 #undef EOF
 
 namespace astra::frontend {
 
+/// Adapt a buffer of `llvm::SourceMgr` to the ANTLR `CharStream` interface.
+/// The whole buffer is held in memory, so `consume` and `seek` only move an
+/// index into it. The underlying buffer must outlive the lexer.
 class SourceMgrCharStream : public antlr4::CharStream {
   const llvm::SourceMgr &SourceMgr;
+  /// The file content. Points into the buffer owned by `SourceMgr`.
   llvm::StringRef Buffer;
+  /// The current read position inside `Buffer`.
   size_t CurrentIndex = 0;
+  /// The `FileID` of the adapted buffer.
   unsigned FileID;
 
 public:
@@ -20,12 +30,11 @@ public:
     if (MB) {
       Buffer = MB->getBuffer();
     } else {
-      // File is invalid.
-      // Create an empty buffer, to avoid crashing.
+      // The file is invalid. Fall back to an empty buffer so the lexer does
+      // not crash. TODO report a proper error instead.
       Buffer = llvm::StringRef("");
 
-      // TODO report error
-      assert(false && "SourceMgr is enpty.");
+      assert(false && "SourceMgr is empty.");
     }
   }
 
@@ -52,12 +61,17 @@ public:
 
   virtual size_t size() override { return Buffer.size(); }
 
-  /// mark/release do nothing, we have entire buffer.
+  virtual void seek(size_t Index) override {
+    CurrentIndex = std::min(Index, Buffer.size());
+  }
+
+  /// mark/release do nothing. The whole buffer is already in memory, so
+  /// there is no state to save or restore.
   virtual ssize_t mark() override { return CurrentIndex; }
   virtual void release(ssize_t /* marker */) override {}
 
   virtual std::string getText(const antlr4::misc::Interval &Interval) override {
-    // Ensure the interval is valid.
+    // Clamp the requested interval to the buffer bounds.
     auto Start = static_cast<size_t>(Interval.a);
     auto Length = static_cast<size_t>(Interval.b - Interval.a + 1);
     if (Start >= Buffer.size()) {
@@ -69,6 +83,8 @@ public:
     }
     return Buffer.substr(Start, Length).str();
   }
+
+  virtual std::string toString() const override { return Buffer.str(); }
 
   virtual std::string getSourceName() const override {
     auto FileName =

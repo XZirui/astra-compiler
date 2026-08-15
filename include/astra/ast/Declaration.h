@@ -14,6 +14,7 @@ struct Declaration : ASTNode {
 struct Parameter : ASTNode {
   IdentifierInfo *Name;
   Type *Type = nullptr;
+  /// The optional default value of the parameter.
   Expr *DefaultValue = nullptr;
 
   Parameter() { Kind = NodeKind::Parameter; }
@@ -36,6 +37,7 @@ struct FunctionDecl : Declaration {
 
 struct VarDecl : Declaration {
   IdentifierInfo *Name;
+  /// True for `var` declarations. A plain `val` is immutable.
   bool IsMutable = false;
   Type *VarType = nullptr;
   Expr *Value = nullptr;

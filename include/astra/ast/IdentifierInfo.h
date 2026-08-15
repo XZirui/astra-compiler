@@ -17,6 +17,8 @@ class IdentifierInfo {
 public:
   llvm::StringRef getName() const { return Name; }
 
+  /// Identifiers are interned by `ASTContext`, so pointer identity is a valid
+  /// equality test.
   bool operator==(const IdentifierInfo &Other) { return this == &Other; }
   bool operator!=(const IdentifierInfo &Other) { return this != &Other; }
 
