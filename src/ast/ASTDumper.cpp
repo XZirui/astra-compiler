@@ -85,6 +85,10 @@ llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Type) {
     return "Float";
   case BuiltinType::Double:
     return "Double";
+  case BuiltinType::Char:
+    return "Char";
+  case BuiltinType::String:
+    return "String";
   }
   llvm_unreachable("Unknown BuiltinType.");
 }
@@ -118,6 +122,10 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
   case NodeKind::TypeRef: {
     auto *Ref = static_cast<const TypeRef *>(Node);
     OS << "TypeRef '" << Ref->Name->getName() << "'";
+    // `Box<>` and `Box` differ: the empty list forces default parameters.
+    if (Ref->ExplicitTypeArgs) {
+      OS << " '<>'";
+    }
     break;
   }
   case NodeKind::BuiltinType: {
@@ -186,6 +194,51 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << Buf << "'";
     break;
   }
+  case NodeKind::StringLiteral: {
+    auto *Lit = static_cast<const StringLiteral *>(Node);
+    OS << "StringLiteral '";
+    for (char C : Lit->Value) {
+      // Escape backslashes, line breaks and other control characters so the
+      // tree output stays on one line per node.
+      switch (C) {
+      case '\\':
+        OS << "\\\\";
+        break;
+      case '\n':
+        OS << "\\n";
+        break;
+      case '\r':
+        OS << "\\r";
+        break;
+      case '\t':
+        OS << "\\t";
+        break;
+      default: {
+        auto Byte = static_cast<unsigned char>(C);
+        if (Byte < 0x20 || Byte == 0x7F) {
+          static constexpr char Hex[] = "0123456789abcdef";
+          OS << "\\x" << Hex[Byte >> 4] << Hex[Byte & 0xF];
+        } else {
+          OS << C;
+        }
+        break;
+      }
+      }
+    }
+    OS << "'";
+    break;
+  }
+  case NodeKind::CharLiteral: {
+    auto *Lit = static_cast<const CharLiteral *>(Node);
+    OS << "CharLiteral ";
+    if (Lit->Value >= 32 && Lit->Value < 127) {
+      OS << "'" << static_cast<char>(Lit->Value) << "'";
+    } else {
+      // Non-printable values dump as their code point, like `IntLiteral`.
+      OS << Lit->Value;
+    }
+    break;
+  }
   case NodeKind::VarExpr: {
     auto *E = static_cast<const VarExpr *>(Node);
     OS << "VarExpr '" << E->Name << "'";
@@ -199,6 +252,14 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
   case NodeKind::BinaryExpr: {
     auto *E = static_cast<const BinaryExpr *>(Node);
     OS << "BinaryExpr '" << getOpSymbol(E->Operator) << "'";
+    break;
+  }
+  case NodeKind::ComparisonChainExpr: {
+    auto *E = static_cast<const ComparisonChainExpr *>(Node);
+    OS << "ComparisonChainExpr";
+    for (Op Operator : E->Operators) {
+      OS << " '" << getOpSymbol(Operator) << "'";
+    }
     break;
   }
   case NodeKind::IfExpr:
@@ -226,9 +287,15 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     }
     break;
   }
-  case NodeKind::CallExpr:
+  case NodeKind::CallExpr: {
+    auto *E = static_cast<const CallExpr *>(Node);
     OS << "CallExpr";
+    // `foo<>()` and `foo()` differ: the empty list forces default parameters.
+    if (E->ExplicitTypeArgs) {
+      OS << " '<>'";
+    }
     break;
+  }
   case NodeKind::IndexExpr:
     OS << "IndexExpr";
     break;
@@ -262,6 +329,8 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "Label '" << Lbl->Name->getName() << "'";
     break;
   }
+  default:
+    llvm_unreachable("Unknown AST node kind.");
   }
   OS << '\n';
 }
@@ -390,9 +459,16 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     pushChild(Children, "RHS", E->RHS);
     break;
   }
+  case NodeKind::ComparisonChainExpr: {
+    auto *E = static_cast<const ComparisonChainExpr *>(Node);
+    appendChildren(Children, E->Operands);
+    break;
+  }
   case NodeKind::CallExpr: {
     auto *E = static_cast<const CallExpr *>(Node);
     pushChild(Children, "Callee", E->Callee);
+    // Type arguments precede the argument list in source order.
+    appendChildren(Children, E->TypeArgs);
     appendChildren(Children, E->Arguments);
     break;
   }
@@ -424,19 +500,27 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     appendChildren(Children, E->Elements);
     break;
   }
+  case NodeKind::TypeRef: {
+    auto *Ref = static_cast<const TypeRef *>(Node);
+    appendChildren(Children, Ref->TypeArgs);
+    break;
+  }
   // Leaves without children.
   case NodeKind::NullLiteral:
   case NodeKind::BoolLiteral:
   case NodeKind::IntLiteral:
   case NodeKind::FloatLiteral:
+  case NodeKind::StringLiteral:
+  case NodeKind::CharLiteral:
   case NodeKind::VarExpr:
   case NodeKind::ThisExpr:
   case NodeKind::ContinueExpr:
   case NodeKind::BreakExpr:
-  case NodeKind::TypeRef:
   case NodeKind::BuiltinType:
   case NodeKind::Label:
     break;
+  default:
+    llvm_unreachable("Unknown AST node kind.");
   }
 }
 

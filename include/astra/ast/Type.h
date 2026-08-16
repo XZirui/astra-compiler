@@ -16,7 +16,12 @@ struct Type : ASTNode {
 };
 
 struct TypeRef : Type {
-  IdentifierInfo *Name;
+  IdentifierInfo *Name = nullptr;
+  /// Type arguments of a generic reference.
+  llvm::SmallVector<Type *, 0> TypeArgs;
+  /// Whether the type argument list was written explicitly. Distinguishes
+  /// `Box` from `Box<>` (force default type parameters).
+  bool ExplicitTypeArgs = false;
   TypeRef() { Kind = NodeKind::TypeRef; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::TypeRef;
@@ -24,7 +29,7 @@ struct TypeRef : Type {
 };
 
 struct BuiltinType : Type {
-  enum Ty { Void, Bool, Int, Long, Float, Double } Type = Void;
+  enum Ty { Void, Bool, Int, Long, Float, Double, Char, String } Type = Void;
   BuiltinType() { Kind = NodeKind::BuiltinType; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::BuiltinType;

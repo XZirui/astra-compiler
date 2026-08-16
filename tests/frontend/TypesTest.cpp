@@ -12,6 +12,7 @@ TEST_CASE("Builtin type keywords", "[types]") {
       {"void", BuiltinType::Void},   {"bool", BuiltinType::Bool},
       {"int", BuiltinType::Int},     {"long", BuiltinType::Long},
       {"float", BuiltinType::Float}, {"double", BuiltinType::Double},
+      {"char", BuiltinType::Char},   {"string", BuiltinType::String},
   };
   for (auto [Keyword, Expected] : Types) {
     test::parseSource(
@@ -79,13 +80,58 @@ TEST_CASE("Function types", "[types]") {
                 BuiltinType::Double);
       });
 
-  test::parseSource("fun g() -> fun () -> int {}", [](ASTContext &, Program *P) {
+  test::parseSource(
+      "fun g() -> fun () -> int {}", [](ASTContext &, Program *P) {
+        auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+        auto *Ty = static_cast<FunctionType *>(Fn->ReturnType);
+        REQUIRE(Ty->Parameters.empty());
+        REQUIRE(static_cast<BuiltinType *>(Ty->ReturnType)->Type ==
+                BuiltinType::Int);
+      });
+}
+
+TEST_CASE("Generic type references", "[types]") {
+  test::parseSource("fun f() -> Box<Int> {}", [](ASTContext &Ctx, Program *P) {
     auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
-    auto *Ty = static_cast<FunctionType *>(Fn->ReturnType);
-    REQUIRE(Ty->Parameters.empty());
-    REQUIRE(static_cast<BuiltinType *>(Ty->ReturnType)->Type ==
-            BuiltinType::Int);
+    auto *Ty = static_cast<TypeRef *>(Fn->ReturnType);
+    REQUIRE(Ty->getKind() == NodeKind::TypeRef);
+    REQUIRE(Ty->Name == Ctx.getIdentifier("Box"));
+    REQUIRE(Ty->TypeArgs.size() == 1);
+    REQUIRE(Ty->TypeArgs[0]->getKind() == NodeKind::TypeRef);
+    REQUIRE(static_cast<TypeRef *>(Ty->TypeArgs[0])->Name ==
+            Ctx.getIdentifier("Int"));
+    REQUIRE(Ty->ExplicitTypeArgs);
   });
+
+  test::parseSource("fun h() -> Box<> {}", [](ASTContext &Ctx, Program *P) {
+    auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+    auto *Ty = static_cast<TypeRef *>(Fn->ReturnType);
+    REQUIRE(Ty->Name == Ctx.getIdentifier("Box"));
+    REQUIRE(Ty->TypeArgs.empty());
+    // `<>` is empty but explicit: it forces the default type parameters.
+    REQUIRE(Ty->ExplicitTypeArgs);
+  });
+
+  test::parseSource("fun i() -> Box {}", [](ASTContext &Ctx, Program *P) {
+    auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+    auto *Ty = static_cast<TypeRef *>(Fn->ReturnType);
+    REQUIRE(Ty->Name == Ctx.getIdentifier("Box"));
+    REQUIRE(Ty->TypeArgs.empty());
+    REQUIRE(!Ty->ExplicitTypeArgs);
+  });
+
+  test::parseSource(
+      "fun g() -> Box<Box<Int>> {}", [](ASTContext &Ctx, Program *P) {
+        auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+        auto *Outer = static_cast<TypeRef *>(Fn->ReturnType);
+        REQUIRE(Outer->TypeArgs.size() == 1);
+        auto *Inner = static_cast<TypeRef *>(Outer->TypeArgs[0]);
+        REQUIRE(Inner->Name == Ctx.getIdentifier("Box"));
+        REQUIRE(Inner->TypeArgs.size() == 1);
+        REQUIRE(Inner->TypeArgs[0]->getKind() == NodeKind::TypeRef);
+        REQUIRE(static_cast<TypeRef *>(Inner->TypeArgs[0])->Name ==
+                Ctx.getIdentifier("Int"));
+      });
 }
 
 TEST_CASE("Parenthesized types are transparent", "[types]") {

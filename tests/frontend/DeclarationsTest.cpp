@@ -45,7 +45,7 @@ TEST_CASE("Function with no parameters and empty body", "[declarations]") {
 
 TEST_CASE("Parameter default values", "[declarations]") {
   test::parseSource("fun f(a: int = 1, b: int) -> void {}", [](ASTContext &Ctx,
-                                                             Program *P) {
+                                                               Program *P) {
     auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
     auto *A = Fn->Parameters[0];
     REQUIRE(A->Name == Ctx.getIdentifier("a"));
@@ -94,12 +94,14 @@ TEST_CASE("Declarations inside a block are wrapped", "[declarations]") {
 }
 
 TEST_CASE("Identifiers are interned", "[declarations]") {
-  test::parseSource(
-      "fun foo() -> void {} fun foo() -> void {}", [](ASTContext &Ctx, Program *P) {
-        auto *First = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
-        auto *Second = static_cast<FunctionDecl *>(P->Objects[1]->Decl);
-        REQUIRE(First->Name == Ctx.getIdentifier("foo"));
-        REQUIRE(Second->Name == Ctx.getIdentifier("foo"));
-        REQUIRE(First->Name == Second->Name);
-      });
+  test::parseSource("fun foo() -> void {} fun foo() -> void {}",
+                    [](ASTContext &Ctx, Program *P) {
+                      auto *First =
+                          static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+                      auto *Second =
+                          static_cast<FunctionDecl *>(P->Objects[1]->Decl);
+                      REQUIRE(First->Name == Ctx.getIdentifier("foo"));
+                      REQUIRE(Second->Name == Ctx.getIdentifier("foo"));
+                      REQUIRE(First->Name == Second->Name);
+                    });
 }

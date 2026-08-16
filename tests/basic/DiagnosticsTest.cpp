@@ -1,11 +1,7 @@
 #include "ParseHelper.h"
 
-#include "astra/ast/Declaration.h"
-#include "astra/ast/Expression.h"
 #include "astra/basic/DiagnosticsEngine.h"
-
 #include <catch2/catch_test_macros.hpp>
-
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -45,22 +41,62 @@ TEST_CASE("Lexer errors are reported", "[diag]") {
   });
 }
 
-TEST_CASE("Unimplemented constructs report a diagnostic instead of crashing",
-          "[diag]") {
+TEST_CASE("Empty type argument lists are accepted", "[diag]") {
+  test::parseSource("var x = foo<>(); fun f() -> Box<> {}",
+                    [](ASTContext &, Program *P) {
+                      // An empty argument list is allowed on purpose: default
+                      // type parameters will fill it in, so there is no
+                      // diagnostic.
+                    });
+}
+
+TEST_CASE("Bare type arguments are a syntax error", "[diag]") {
   test::parseSourceWithDiags(
       "var x = foo<int>;",
       [](ASTContext &, Program *P, basic::DiagnosticsEngine &Diags) {
-        // No syntax error: the parse tree is valid, so
-        // the builder runs and reports the gap.
-        REQUIRE(P != nullptr);
+        // Type arguments are only allowed directly before `(`.
+        REQUIRE(P == nullptr);
         REQUIRE(Diags.hasErrors());
         const auto &All = Diags.getDiagnostics();
-        REQUIRE(All.size() == 1);
-        REQUIRE(All[0].getMessage().find("not implemented") !=
+        REQUIRE(All[0].getMessage().find("no viable alternative") !=
                 llvm::StringRef::npos);
+      });
+}
 
-        auto *Var = static_cast<VarDecl *>(P->Objects[0]->Decl);
-        REQUIRE(Var->Value->getKind() == NodeKind::VarExpr);
+TEST_CASE("Unterminated string literals are lexer errors", "[diag]") {
+  test::parseSourceWithDiags(
+      "var s = \"abc;",
+      [](ASTContext &, Program *P, basic::DiagnosticsEngine &Diags) {
+        // The lexer reports the unterminated string; error recovery then
+        // makes the parser report the missing expression after `=`. The
+        // program is not built.
+        REQUIRE(P == nullptr);
+        REQUIRE(Diags.hasErrors());
+        const auto &All = Diags.getDiagnostics();
+        REQUIRE(All.size() == 2);
+        REQUIRE(All[0].getMessage().find("token recognition") !=
+                llvm::StringRef::npos);
+        REQUIRE(All[1].getMessage().find("mismatched input") !=
+                llvm::StringRef::npos);
+      });
+}
+
+TEST_CASE("Empty char literals are rejected", "[diag]") {
+  test::parseSourceWithDiags(
+      "var c = '';",
+      [](ASTContext &, Program *P, basic::DiagnosticsEngine &Diags) {
+        REQUIRE(P == nullptr);
+        REQUIRE(Diags.hasErrors());
+      });
+}
+
+TEST_CASE("Whitespace between '?' and '.' is a syntax error", "[diag]") {
+  test::parseSourceWithDiags(
+      "var r = a ? .b;",
+      [](ASTContext &, Program *P, basic::DiagnosticsEngine &Diags) {
+        // `?.` is a single token; a separated `?` cannot start a suffix.
+        REQUIRE(P == nullptr);
+        REQUIRE(Diags.hasErrors());
       });
 }
 
@@ -74,7 +110,7 @@ TEST_CASE("Multiple errors are collected", "[diag]") {
       });
 }
 
-TEST_CASE("Diagnostics print in clang style", "[diag]") {
+TEST_CASE("Diagnostics print style", "[diag]") {
   test::parseSourceWithDiags("fun f() {", [](ASTContext &, Program *,
                                              basic::DiagnosticsEngine &Diags) {
     llvm::SmallString<256> Buf;

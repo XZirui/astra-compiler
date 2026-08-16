@@ -6,6 +6,8 @@
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/Support/ErrorHandling.h>
 
+#include <optional>
+
 namespace astra::frontend {
 
 /// Return the first non-null argument. The alternatives of a rule are
@@ -59,8 +61,6 @@ static ast::Op getBinaryOp(int TokenType) {
     return ast::Op::Ge;
   case AstraParser::LSHIFT:
     return ast::Op::LShift;
-  case AstraParser::RSHIFT:
-    return ast::Op::RShift;
   case AstraParser::BIT_AND:
     return ast::Op::BitAnd;
   case AstraParser::BIT_OR:
@@ -71,6 +71,151 @@ static ast::Op getBinaryOp(int TokenType) {
     // The token types above are the only binary operators the grammar allows.
     llvm_unreachable("Unknown binary operator.");
   }
+}
+
+/// Append `CodePoint` (BMP) to `Out` as UTF-8.
+static void appendUtf8(llvm::SmallVectorImpl<char> &Out, uint32_t CodePoint) {
+  if (CodePoint < 0x80) {
+    Out.push_back(static_cast<char>(CodePoint));
+  } else if (CodePoint < 0x800) {
+    Out.push_back(static_cast<char>(0xC0 | (CodePoint >> 6)));
+    Out.push_back(static_cast<char>(0x80 | (CodePoint & 0x3F)));
+  } else {
+    Out.push_back(static_cast<char>(0xE0 | (CodePoint >> 12)));
+    Out.push_back(static_cast<char>(0x80 | ((CodePoint >> 6) & 0x3F)));
+    Out.push_back(static_cast<char>(0x80 | (CodePoint & 0x3F)));
+  }
+}
+
+/// Decode the escape sequence starting at `Body[I]` (which must be a
+/// backslash) and advance `I` past it. Returns the decoded code point, or
+/// `std::nullopt` (with a diagnostic on `Range`) for an invalid escape.
+static std::optional<uint32_t> decodeEscape(llvm::StringRef Body, size_t &I,
+                                            basic::DiagnosticsEngine &Diags,
+                                            llvm::SMRange Range) {
+  assert(Body[I] == '\\');
+  auto Esc = Body[I + 1];
+  switch (Esc) {
+  case 't':
+    I += 2;
+    return 0x09;
+  case 'b':
+    I += 2;
+    return 0x08;
+  case 'n':
+    I += 2;
+    return 0x0A;
+  case 'r':
+    I += 2;
+    return 0x0D;
+  case '\'':
+    I += 2;
+    return 0x27;
+  case '"':
+    I += 2;
+    return 0x22;
+  case '\\':
+    I += 2;
+    return 0x5C;
+  case '$':
+    I += 2;
+    return 0x24;
+  case 'u': {
+    auto Hex = Body.substr(I + 2, 4);
+    unsigned CodePoint;
+    if (Hex.size() != 4 || Hex.getAsInteger(16, CodePoint)) {
+      Diags.report(Range, llvm::SourceMgr::DK_Error,
+                   "invalid \\u escape sequence");
+      return std::nullopt;
+    }
+    I += 6;
+    return CodePoint;
+  }
+  default:
+    Diags.report(Range, llvm::SourceMgr::DK_Error, "invalid escape sequence");
+    return std::nullopt;
+  }
+}
+
+/// Decode `Body` (string literal content without quotes) into `Out` as UTF-8
+/// bytes. Returns false and reports a diagnostic on the first invalid escape.
+static bool decodeStringBody(llvm::StringRef Body,
+                             llvm::SmallVectorImpl<char> &Out,
+                             basic::DiagnosticsEngine &Diags,
+                             llvm::SMRange Range) {
+  for (size_t I = 0; I < Body.size();) {
+    if (Body[I] == '\\') {
+      auto CodePoint = decodeEscape(Body, I, Diags, Range);
+      if (!CodePoint) {
+        return false;
+      }
+      appendUtf8(Out, *CodePoint);
+    } else {
+      Out.push_back(Body[I]);
+      ++I;
+    }
+  }
+  return true;
+}
+
+/// Decode the single-character content `Body` (char literal without quotes)
+/// into `CodePoint`. Returns false and reports a diagnostic on invalid input.
+static bool decodeCharValue(llvm::StringRef Body, uint32_t &CodePoint,
+                            basic::DiagnosticsEngine &Diags,
+                            llvm::SMRange Range) {
+  if (Body.front() == '\\') {
+    size_t I = 0;
+    auto Decoded = decodeEscape(Body, I, Diags, Range);
+    if (!Decoded) {
+      return false;
+    }
+    if (I != Body.size()) {
+      // The lexer only accepts one escape, so this is unreachable for
+      // lexed tokens; guard anyway.
+      Diags.report(Range, llvm::SourceMgr::DK_Error,
+                   "invalid character literal");
+      return false;
+    }
+    CodePoint = *Decoded;
+    return true;
+  }
+
+  // A raw byte, or a single UTF-8 sequence.
+  unsigned Lead = static_cast<unsigned char>(Body[0]);
+  if (Body.size() == 1) {
+    CodePoint = Lead;
+    return true;
+  }
+  size_t Length;
+  uint32_t Value;
+  if ((Lead & 0xE0) == 0xC0) {
+    Length = 2;
+    Value = Lead & 0x1F;
+  } else if ((Lead & 0xF0) == 0xE0) {
+    Length = 3;
+    Value = Lead & 0x0F;
+  } else if ((Lead & 0xF8) == 0xF0) {
+    Length = 4;
+    Value = Lead & 0x07;
+  } else {
+    Diags.report(Range, llvm::SourceMgr::DK_Error, "invalid character literal");
+    return false;
+  }
+  if (Body.size() != Length) {
+    Diags.report(Range, llvm::SourceMgr::DK_Error, "invalid character literal");
+    return false;
+  }
+  for (size_t J = 1; J < Length; ++J) {
+    unsigned char Byte = static_cast<unsigned char>(Body[J]);
+    if ((Byte & 0xC0) != 0x80) {
+      Diags.report(Range, llvm::SourceMgr::DK_Error,
+                   "invalid character literal");
+      return false;
+    }
+    Value = (Value << 6) | (Byte & 0x3F);
+  }
+  CodePoint = Value;
+  return true;
 }
 
 /// Map a prefix unary operator token to the corresponding `ast::Op`.
@@ -215,6 +360,15 @@ std::any ASTBuilder::visitTypeRef(AstraParser::TypeRefContext *Ctx) {
   auto *Result = ASTContext.allocate<ast::TypeRef>();
   Result->Range = getRange(Ctx);
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
+  if (auto *TypeArgs = Ctx->typeArguments()) {
+    // An empty list (`<>`) is valid: default type parameters fill it in.
+    Result->ExplicitTypeArgs = true;
+    if (auto *ArgList = TypeArgs->typeArgument()) {
+      for (auto *Arg : ArgList->type()) {
+        Result->TypeArgs.push_back(getType(Arg));
+      }
+    }
+  }
   return static_cast<ast::Type *>(Result);
 }
 
@@ -235,9 +389,10 @@ std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
   auto *Result = ASTContext.allocate<ast::BuiltinType>();
   Result->Range = getRange(Ctx);
 
-  auto BuiltinTy = getToken(Ctx->VOID(), Ctx->BOOL(), Ctx->INT(), Ctx->LONG(),
-                            Ctx->FLOAT(), Ctx->DOUBLE())
-                       ->getType();
+  auto BuiltinTy =
+      getToken(Ctx->VOID(), Ctx->BOOL(), Ctx->INT(), Ctx->LONG(), Ctx->FLOAT(),
+               Ctx->DOUBLE(), Ctx->CHAR(), Ctx->STRING())
+          ->getType();
   switch (BuiltinTy) {
   case AstraParser::VOID:
     Result->Type = ast::BuiltinType::Void;
@@ -256,6 +411,12 @@ std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
     break;
   case AstraParser::DOUBLE:
     Result->Type = ast::BuiltinType::Double;
+    break;
+  case AstraParser::CHAR:
+    Result->Type = ast::BuiltinType::Char;
+    break;
+  case AstraParser::STRING:
+    Result->Type = ast::BuiltinType::String;
     break;
   default:
     // The token types above are the only builtin types the grammar allows.
@@ -299,7 +460,10 @@ std::any ASTBuilder::visitAssignment(AstraParser::AssignmentContext *Ctx) {
   // The distinction is lost, so codegen cannot rely on it.
   auto Op = getToken(OpTree->ASSIGNMENT(), OpTree->ADD_ASSIGNMENT(),
                      OpTree->SUB_ASSIGNMENT(), OpTree->MULT_ASSIGNMENT(),
-                     OpTree->DIV_ASSIGNMENT(), OpTree->MOD_ASSIGNMENT())
+                     OpTree->DIV_ASSIGNMENT(), OpTree->MOD_ASSIGNMENT(),
+                     OpTree->BIT_AND_ASSIGNMENT(), OpTree->BIT_OR_ASSIGNMENT(),
+                     OpTree->BIT_XOR_ASSIGNMENT(), OpTree->LSHIFT_ASSIGNMENT(),
+                     OpTree->RSHIFT_ASSIGNMENT())
                 ->getType();
   switch (Op) {
   case AstraParser::ASSIGNMENT:
@@ -319,6 +483,21 @@ std::any ASTBuilder::visitAssignment(AstraParser::AssignmentContext *Ctx) {
     break;
   case AstraParser::MOD_ASSIGNMENT:
     Result->Operator = ast::Op::Mod;
+    break;
+  case AstraParser::BIT_AND_ASSIGNMENT:
+    Result->Operator = ast::Op::BitAnd;
+    break;
+  case AstraParser::BIT_OR_ASSIGNMENT:
+    Result->Operator = ast::Op::BitOr;
+    break;
+  case AstraParser::BIT_XOR_ASSIGNMENT:
+    Result->Operator = ast::Op::BitXor;
+    break;
+  case AstraParser::LSHIFT_ASSIGNMENT:
+    Result->Operator = ast::Op::LShift;
+    break;
+  case AstraParser::RSHIFT_ASSIGNMENT:
+    Result->Operator = ast::Op::RShift;
     break;
   default:
     // The token types above are the only assignment operators the grammar
@@ -451,13 +630,69 @@ std::any ASTBuilder::visitEquality(AstraParser::EqualityContext *Ctx) {
 }
 
 std::any ASTBuilder::visitComparison(AstraParser::ComparisonContext *Ctx) {
-  // Same as `visitEquality`: at most one comparison operator.
-  return foldLeftAssoc(Ctx->infixExpr(), std::vector{Ctx->comparisonOperator()},
-                       [](AstraParser::ComparisonOperatorContext *OpCtx) {
-                         auto *Tok = getToken(OpCtx->LT(), OpCtx->GT(),
-                                              OpCtx->LE(), OpCtx->GE());
-                         return getBinaryOp(Tok->getType());
-                       });
+  // `foo<Int>>(x)`: a second `>` blocks the argument list, so the
+  // generic-call reading (preferred when `>` is directly followed by `(`)
+  // cannot close the type argument list. Report the error and degrade to a
+  // best-effort `CallExpr` so the rest of the program still parses.
+  if (Ctx->typeArguments()) {
+    Diags.report(getRange(Ctx->GT()->getSymbol(), Ctx->GT()->getSymbol()),
+                 llvm::SourceMgr::DK_Error,
+                 "expected '(' after type argument list");
+    auto *Result = ASTContext.allocate<ast::CallExpr>();
+    Result->Range = getRange(Ctx);
+    Result->Callee = getExpr(Ctx->infixExpr(0));
+    Result->ExplicitTypeArgs = true;
+    if (auto *ArgList = Ctx->typeArguments()->typeArgument()) {
+      for (auto *Arg : ArgList->type()) {
+        Result->TypeArgs.push_back(getType(Arg));
+      }
+    }
+    if (auto *Args = Ctx->valueArguments()) {
+      for (auto *Arg : Args->valueArgument()) {
+        Result->Arguments.push_back(getExpr(Arg->expression()));
+      }
+    }
+    return static_cast<ast::Expr *>(Result);
+  }
+
+  const auto &Subs = Ctx->infixExpr();
+  const auto &Ops = Ctx->comparisonOperator();
+  auto GetOp = [](AstraParser::ComparisonOperatorContext *OpCtx) {
+    auto *Tok = getToken(OpCtx->LT(), OpCtx->GT(), OpCtx->LE(), OpCtx->GE());
+    return getBinaryOp(Tok->getType());
+  };
+  if (Ops.size() < 2) {
+    // At most one operator: the chain degenerates to a `BinaryExpr`, or a
+    // plain passthrough when there is no operator.
+    return foldLeftAssoc(Subs, Ops, GetOp);
+  }
+
+  // Two or more operators form a comparison chain, e.g. `a < b <= c`. This
+  // has the math semantics `a < b && b <= c` (each middle operand is
+  // evaluated once). The expansion is left to semantic analysis. All
+  // operators must point in the same direction.
+  auto *Result = ASTContext.allocate<ast::ComparisonChainExpr>();
+  Result->Range = getRange(Ctx);
+  bool Mixed = false;
+  std::optional<bool> Ascending;
+  for (size_t I = 0; I < Subs.size(); ++I) {
+    Result->Operands.push_back(getExpr(Subs[I]));
+    if (I < Ops.size()) {
+      auto Op = GetOp(Ops[I]);
+      Result->Operators.push_back(Op);
+      bool IsAscending = (Op == ast::Op::Lt || Op == ast::Op::Le);
+      if (Ascending) {
+        Mixed |= (*Ascending != IsAscending);
+      } else {
+        Ascending = IsAscending;
+      }
+    }
+  }
+  if (Mixed) {
+    Diags.report(getRange(Ctx), llvm::SourceMgr::DK_Error,
+                 "comparison chain with mixed operators");
+  }
+  return static_cast<ast::Expr *>(Result);
 }
 
 std::any ASTBuilder::visitInfixExpr(AstraParser::InfixExprContext *Ctx) {
@@ -528,11 +763,25 @@ std::any ASTBuilder::visitBitwiseAnd(AstraParser::BitwiseAndContext *Ctx) {
 }
 
 std::any ASTBuilder::visitBitwiseShift(AstraParser::BitwiseShiftContext *Ctx) {
-  return foldLeftAssoc(Ctx->addition(), Ctx->bitwiseShiftOperator(),
-                       [](AstraParser::BitwiseShiftOperatorContext *OpCtx) {
-                         return OpCtx->LSHIFT() ? ast::Op::LShift
-                                                : ast::Op::RShift;
-                       });
+  return foldLeftAssoc(
+      Ctx->addition(), Ctx->bitwiseShiftOperator(),
+      [this](AstraParser::BitwiseShiftOperatorContext *OpCtx) {
+        if (OpCtx->LSHIFT()) {
+          return ast::Op::LShift;
+        }
+        // `>>` lexes as two `GT` tokens (there is no `RSHIFT` token). Only a
+        // physically adjacent pair is a right shift. `a > > b`, with
+        // whitespace or a comment between the two `>`, is reported as an error.
+        auto *First = OpCtx->GT(0);
+        auto *Second = OpCtx->GT(1);
+        if (Second->getSymbol()->getStartIndex() !=
+            First->getSymbol()->getStopIndex() + 1) {
+          Diags.report(getRange(First->getSymbol(), Second->getSymbol()),
+                       llvm::SourceMgr::DK_Error,
+                       "right shift requires two adjacent '>' tokens");
+        }
+        return ast::Op::RShift;
+      });
 }
 
 std::any ASTBuilder::visitAddition(AstraParser::AdditionContext *Ctx) {
@@ -599,6 +848,15 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
       auto *CallExpr = ASTContext.allocate<ast::CallExpr>();
       CallExpr->Range = getRange(Ctx->getStart(), Postfix->getStop());
       CallExpr->Callee = Result;
+      if (auto *TypeArgs = Call->typeArguments()) {
+        // An empty list (`<>`) is valid: default type parameters fill it in.
+        CallExpr->ExplicitTypeArgs = true;
+        if (auto *ArgList = TypeArgs->typeArgument()) {
+          for (auto *Arg : ArgList->type()) {
+            CallExpr->TypeArgs.push_back(getType(Arg));
+          }
+        }
+      }
       if (auto *Args = Call->valueArguments()) {
         for (auto *Arg : Args->valueArgument()) {
           // TODO named arguments and spread
@@ -617,12 +875,8 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
       Member->Range = getRange(Ctx->getStart(), Postfix->getStop());
       Member->Base = Result;
       Member->Member = getText(Nav->IDENTIFIER());
-      Member->NullSafe = Nav->memberAccessOperator()->QUEST() != nullptr;
+      Member->NullSafe = Nav->memberAccessOperator()->QUEST_DOT() != nullptr;
       Result = Member;
-    } else {
-      // TODO type arguments, e.g. `foo<Int>`
-      Diags.report(getRange(Postfix), llvm::SourceMgr::DK_Error,
-                   "type arguments are not implemented yet");
     }
   }
   return static_cast<ast::Expr *>(Result);
@@ -680,10 +934,46 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
                    "invalid integer literal");
       return static_cast<ast::Expr *>(Result);
     }
-    // `getAsInteger` produces the minimal bit width (e.g. 8 bits for 0xFF).
-    // Zero-extend to 64 bits so the value is not sign-truncated by the
-    // signed `APSInt` interpretation.
+    // The literal must fit in a signed 64-bit `long`. `getAsInteger`
+    // over-allocates the APInt width (roughly 4 bits per digit), so check the
+    // value itself: anything with 64 or more active bits exceeds `LONG_MAX`.
+    if (Raw.getActiveBits() > 63) {
+      Diags.report(Result->Range, llvm::SourceMgr::DK_Error,
+                   "integer literal is too large for `long`");
+      return static_cast<ast::Expr *>(Result);
+    }
+    // The value fits in 63 bits, so converting to a full 64-bit APInt is
+    // exact whether the parsed width was smaller (`zext`) or larger
+    // (`trunc`; the high bits are zero). The signed `APSInt` interpretation
+    // then never sign-extends or truncates the value.
+    if (Raw.getBitWidth() > 64) {
+      Raw = Raw.trunc(64);
+    }
     Result->Value = llvm::APSInt(Raw.zext(64), /*IsUnsigned=*/false);
+    return static_cast<ast::Expr *>(Result);
+  }
+  if (Ctx->STRING_LITERAL()) {
+    auto *Result = ASTContext.allocate<ast::StringLiteral>();
+    Result->Range = getRange(Ctx);
+    // The token is closed (unterminated strings never reach the builder),
+    // so stripping the quotes is safe.
+    auto Body = getText(Ctx->STRING_LITERAL()).drop_front().drop_back();
+    llvm::SmallVector<char, 16> Decoded;
+    if (decodeStringBody(Body, Decoded, Diags, Result->Range)) {
+      Result->Value = ASTContext.allocateCopy(
+          llvm::StringRef(Decoded.data(), Decoded.size()));
+    } else {
+      // Keep the raw text so the node stays usable; the diagnostic was
+      // already reported.
+      Result->Value = ASTContext.allocateCopy(Body);
+    }
+    return static_cast<ast::Expr *>(Result);
+  }
+  if (Ctx->CHAR_LITERAL()) {
+    auto *Result = ASTContext.allocate<ast::CharLiteral>();
+    Result->Range = getRange(Ctx);
+    auto Body = getText(Ctx->CHAR_LITERAL()).drop_front().drop_back();
+    decodeCharValue(Body, Result->Value, Diags, Result->Range);
     return static_cast<ast::Expr *>(Result);
   }
 
@@ -697,12 +987,17 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
   if (Ctx->FLOAT_LITERAL()) {
     Text = Text.drop_back(); // strip the trailing 'f'/'F' suffix
   }
-  if (!basic::convertFloatString(Value, Text,
-                                 llvm::APFloat::rmNearestTiesToEven)) {
+  auto Status = basic::convertFloatString(Value, Text,
+                                          llvm::APFloat::rmNearestTiesToEven);
+  if (Status == llvm::APFloat::opInvalidOp) {
     // Unreachable for tokens the lexer accepted; degrade instead of crash.
     Diags.report(Result->Range, llvm::SourceMgr::DK_Error,
                  "invalid floating-point literal");
     return static_cast<ast::Expr *>(Result);
+  }
+  if (Status & (llvm::APFloat::opOverflow | llvm::APFloat::opUnderflow)) {
+    Diags.report(Result->Range, llvm::SourceMgr::DK_Error,
+                 "floating-point literal is out of range");
   }
   Result->Value = std::move(Value);
   return static_cast<ast::Expr *>(Result);

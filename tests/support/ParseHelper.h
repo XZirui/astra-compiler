@@ -17,7 +17,8 @@ namespace astra::test {
 /// declared first so it is destroyed last: AST node `Range`s point into its
 /// buffer. The callback form keeps the lifetimes structurally impossible to
 /// misuse.
-template <typename FnTy> void parseSourceWithDiags(llvm::StringRef Src, FnTy &&Fn) {
+template <typename FnTy>
+void parseSourceWithDiags(llvm::StringRef Src, FnTy &&Fn) {
   llvm::SourceMgr SrcMgr;
   unsigned FileID = SrcMgr.AddNewSourceBuffer(
       llvm::MemoryBuffer::getMemBufferCopy(Src, "<test>"), llvm::SMLoc());

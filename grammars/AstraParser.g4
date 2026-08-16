@@ -40,7 +40,7 @@ parenType
     ;
 
 typeRef
-    : IDENTIFIER
+    : IDENTIFIER typeArguments?
     ;
 
 functionType
@@ -52,6 +52,8 @@ paramTypeList
     ;
 
 // TODO value for template
+// TODO: default type parameters (e.g. `T = Int`); an empty type argument
+// list `<>` is accepted so it can request the defaults.
 typeArguments
     : LT typeArgument? GT
     ;
@@ -67,6 +69,8 @@ builtinType
     | LONG
     | FLOAT
     | DOUBLE
+    | CHAR
+    | STRING
     ;
 
 block
@@ -96,6 +100,11 @@ assignmentOperator
     | MULT_ASSIGNMENT
     | DIV_ASSIGNMENT
     | MOD_ASSIGNMENT
+    | BIT_AND_ASSIGNMENT
+    | BIT_OR_ASSIGNMENT
+    | BIT_XOR_ASSIGNMENT
+    | LSHIFT_ASSIGNMENT
+    | RSHIFT_ASSIGNMENT
     ;
 
 variableDecls
@@ -173,8 +182,15 @@ comparisonOperator
     | GE
     ;
 
+// A dangling `>` directly before `(` prefers the generic-call reading (Kotlin
+// rule), e.g. `foo<Int>>(x)` / `a < b >> (x)`: the second `>` cannot close the
+// type argument list, so the builder reports an error. A single `>` before `(`
+// (`a < b > (c)`) is already consumed by the postfix layer's `callSuffix` and
+// never reaches this alternative. Keep this alternative first: ambiguous
+// inputs resolve to the smallest alternative, so the generic reading wins.
 comparison
-    : infixExpr (comparisonOperator infixExpr)?
+    : infixExpr typeArguments GT LPAREN valueArguments? RPAREN
+    | infixExpr (comparisonOperator infixExpr)*
     ;
 
 inOperator
@@ -211,7 +227,11 @@ bitwiseAnd
 
 bitwiseShiftOperator
     : LSHIFT
-    | RSHIFT
+    // `>>` lexes as two `GT` tokens (there is no `RSHIFT` token), so
+    // nested type arguments like `foo<Bar<Baz>>()` parse correctly. Only a
+    // physically adjacent `>>` is a right shift: `a > > b` (whitespace or a
+    // comment between the two `>`) is reported as an error by the builder.
+    | GT GT
     ;
 
 bitwiseShift
@@ -263,14 +283,15 @@ prefixUnaryExpr
     ;
 
 unaryPostfix
-    : typeArguments
-    | callSuffix
+    : callSuffix
     | indexingSuffix
     | navigationSuffix
     ;
 
+// Type arguments are only valid directly before the argument list, e.g.
+// `foo<Int>()`. A bare `foo<Int>` is a syntax error.
 callSuffix
-    : LPAREN valueArguments? RPAREN
+    : typeArguments? LPAREN valueArguments? RPAREN
     ;
 
 valueArguments
@@ -290,7 +311,8 @@ navigationSuffix
     ;
 
 memberAccessOperator
-    : QUEST? DOT
+    : QUEST_DOT
+    | DOT
     | DOUBLE_COLON
     ;
 
@@ -313,13 +335,14 @@ parenExpr
     : LPAREN expression RPAREN
     ;
 
-// TODO CharLiteral and StringLiteral
 literalConstant
     : BOOLEAN_LITERAL
     | INTEGER_LITERAL
     | FLOAT_LITERAL
     | DOUBLE_LITERAL
     | NULL_LITERAL
+    | STRING_LITERAL
+    | CHAR_LITERAL
     ;
 
 

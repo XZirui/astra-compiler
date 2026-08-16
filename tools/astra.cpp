@@ -11,7 +11,7 @@
 
 static llvm::cl::opt<std::string>
     InputFilename(llvm::cl::Positional,
-                  llvm::cl::desc("<input .ast source file>"),
+                  llvm::cl::desc("<input .as source file>"),
                   llvm::cl::init(""));
 
 // Dumping the AST is the only useful output for now, so it defaults to on.
@@ -40,7 +40,9 @@ int main(int argc, char **argv) {
   astra::ast::ASTContext Ctx(SrcMgr);
   astra::basic::DiagnosticsEngine Diags(SrcMgr);
   auto *Program = astra::frontend::parse(Ctx, SrcMgr, FileID, Diags);
-  if (!Program) {
+  if (!Program || Diags.hasErrors()) {
+    // The builder reports semantic-ish diagnostics (e.g. a spaced `>>`) on
+    // an otherwise parseable program; never exit cleanly on an error.
     Diags.print(llvm::errs());
     return 1;
   }

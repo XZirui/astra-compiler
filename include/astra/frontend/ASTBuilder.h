@@ -50,9 +50,15 @@ protected:
 
   /// Return a SMRange that points to [Start, Stop + 1).
   llvm::SMRange getRange(antlr4::Token *Start, antlr4::Token *Stop) {
-    auto StopIndex = Stop->getStopIndex();
-    auto *StopChar = SourceMgr.getMemoryBuffer(CurrentFile)->getBufferStart() +
-                     StopIndex + 1;
+    auto *MB = SourceMgr.getMemoryBuffer(CurrentFile);
+    size_t Size = MB->getBufferSize();
+    // The EOF token reports a stop index one past the last byte (`SIZE_MAX`
+    // for an empty buffer); clamp it so `+1` never wraps past the buffer.
+    size_t StopIndex = Stop->getStopIndex();
+    if (StopIndex >= Size) {
+      StopIndex = Size;
+    }
+    auto *StopChar = MB->getBufferStart() + StopIndex + 1;
     return llvm::SMRange(getLoc(Start), llvm::SMLoc::getFromPointer(StopChar));
   }
 
@@ -62,12 +68,17 @@ protected:
 
   /// Return a `StringRef` over [StartIndex, StopIndex], both ends inclusive.
   llvm::StringRef getText(size_t StartIndex, size_t StopIndex) {
-    if (StopIndex < StartIndex) {
+    const auto *MB = SourceMgr.getMemoryBuffer(CurrentFile);
+    size_t Size = MB->getBufferSize();
+    // The EOF token reports a stop index one past the last byte (`SIZE_MAX`
+    // for an empty buffer); clamp it so the length never goes out of bounds.
+    if (StartIndex >= Size || StopIndex < StartIndex) {
       return llvm::StringRef();
     }
-    const auto *MB = SourceMgr.getMemoryBuffer(CurrentFile);
-    const char *BufferStart = MB->getBufferStart();
-    return llvm::StringRef(BufferStart + StartIndex,
+    if (StopIndex >= Size) {
+      StopIndex = Size - 1; // Size > 0 because StartIndex < Size.
+    }
+    return llvm::StringRef(MB->getBufferStart() + StartIndex,
                            StopIndex - StartIndex + 1);
   }
 
@@ -172,17 +183,20 @@ public:
   std::any
   visitMultiplication(AstraParser::MultiplicationContext *Ctx) override;
   std::any visitAsExpr(AstraParser::AsExprContext *Ctx) override;
-  std::any visitPrefixUnaryExpr(AstraParser::PrefixUnaryExprContext *Ctx) override;
+  std::any
+  visitPrefixUnaryExpr(AstraParser::PrefixUnaryExprContext *Ctx) override;
   std::any
   visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) override;
   std::any visitPrimaryExpr(AstraParser::PrimaryExprContext *Ctx) override;
   std::any visitParenExpr(AstraParser::ParenExprContext *Ctx) override;
-  std::any visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) override;
+  std::any
+  visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) override;
   std::any
   visitCollectionLiteral(AstraParser::CollectionLiteralContext *Ctx) override;
   std::any visitThisLiteral(AstraParser::ThisLiteralContext *Ctx) override;
   std::any visitIfExpression(AstraParser::IfExpressionContext *Ctx) override;
-  std::any visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) override;
+  std::any
+  visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) override;
   std::any visitLabel(AstraParser::LabelContext *Ctx) override;
 };
 } // namespace astra::frontend

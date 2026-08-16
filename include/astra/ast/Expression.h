@@ -27,7 +27,7 @@ struct LiteralConstant : Expr {
   LiteralConstant() { IsConst = true; }
   static bool classof(const ASTNode *Node) {
     auto K = Node->getKind();
-    return (K <= NodeKind::FloatLiteral) && (K >= NodeKind::NullLiteral);
+    return (K <= NodeKind::CharLiteral) && (K >= NodeKind::NullLiteral);
   }
 };
 
@@ -62,6 +62,29 @@ struct FloatLiteral : LiteralConstant {
   FloatLiteral() { Kind = NodeKind::FloatLiteral; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::FloatLiteral;
+  }
+};
+
+struct StringLiteral : LiteralConstant {
+  /// The decoded content of the literal, without the surrounding quotes.
+  /// The bytes live in the ASTContext arena and stay valid for the lifetime
+  /// of the context.
+  llvm::StringRef Value;
+
+  StringLiteral() { Kind = NodeKind::StringLiteral; }
+  static bool classof(const ASTNode *Node) {
+    return Node->getKind() == NodeKind::StringLiteral;
+  }
+};
+
+struct CharLiteral : LiteralConstant {
+  /// The decoded value of the literal as a Unicode code point (or the raw
+  /// byte for non-escaped source characters).
+  uint32_t Value = 0;
+
+  CharLiteral() { Kind = NodeKind::CharLiteral; }
+  static bool classof(const ASTNode *Node) {
+    return Node->getKind() == NodeKind::CharLiteral;
   }
 };
 
@@ -126,6 +149,22 @@ struct BinaryExpr : Expr {
   }
 };
 
+/// A chain of comparison operators, e.g. `a < b <= c`. This has the math
+/// semantics `a < b && b <= c` (each middle operand is evaluated once); the
+/// expansion is left to semantic analysis / codegen. All operators must
+/// point in the same direction; mixed directions are a builder diagnostic.
+struct ComparisonChainExpr : Expr {
+  llvm::SmallVector<Expr *, 2> Operands;
+  /// One `Op` per gap, `Operands.size() - 1` entries in total.
+  /// Only Lt / Le / Gt / Ge are valid.
+  llvm::SmallVector<Op, 1> Operators;
+
+  ComparisonChainExpr() { Kind = NodeKind::ComparisonChainExpr; }
+  static bool classof(const ASTNode *Node) {
+    return Node->getKind() == NodeKind::ComparisonChainExpr;
+  }
+};
+
 struct IfExpr : Expr {
   Expr *Condition = nullptr;
   Expr *Then = nullptr;
@@ -147,7 +186,7 @@ struct ThrowExpr : Expr {
 };
 
 struct Label : ASTNode {
-  IdentifierInfo *Name;
+  IdentifierInfo *Name = nullptr;
   // TODO attach to statement
   Label() { Kind = NodeKind::Label; }
   static bool classof(const ASTNode *Node) {
@@ -185,6 +224,12 @@ struct BreakExpr : Expr {
 struct CallExpr : Expr {
   Expr *Callee = nullptr;
   llvm::SmallVector<Expr *> Arguments;
+  /// Type arguments written before the argument list, e.g. `<Int>` in
+  /// `foo<Int>(1)`.
+  llvm::SmallVector<Type *, 1> TypeArgs;
+  /// Whether a type argument list was written explicitly. Distinguishes
+  /// `foo()` (type inference) from `foo<>()` (force default type parameters).
+  bool ExplicitTypeArgs = false;
 
   CallExpr() { Kind = NodeKind::CallExpr; }
   static bool classof(const ASTNode *Node) {

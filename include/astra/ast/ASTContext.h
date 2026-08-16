@@ -6,6 +6,7 @@
 #include <llvm/Support/Allocator.h>
 #include <llvm/Support/SourceMgr.h>
 
+#include <cstring>
 #include <new>
 
 namespace astra::ast {
@@ -60,6 +61,17 @@ public:
       new (Result + I) T();
     }
     return Result;
+  }
+
+  /// Copy `Str` into the arena and return a `StringRef` to the copy.
+  /// The copy is never freed; it lives as long as the context.
+  llvm::StringRef allocateCopy(llvm::StringRef Str) const {
+    if (Str.empty()) {
+      return llvm::StringRef();
+    }
+    void *Mem = allocate(Str.size());
+    std::memcpy(Mem, Str.data(), Str.size());
+    return llvm::StringRef(static_cast<char *>(Mem), Str.size());
   }
 };
 } // namespace astra::ast

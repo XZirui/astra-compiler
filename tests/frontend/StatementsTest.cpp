@@ -111,11 +111,25 @@ TEST_CASE("Assignment statements", "[statements]") {
     REQUIRE(Stmt->RHS->getKind() == NodeKind::IntLiteral);
   });
 
-  test::parseSource("fun f() -> void { x += 1; }", [](ASTContext &, Program *P) {
-    // Compound assignments are folded into the plain operator.
-    auto *Stmt = static_cast<AssignmentStmt *>(firstStmt(P));
-    REQUIRE(Stmt->Operator == Op::Add);
-  });
+  test::parseSource("fun f() -> void { x += 1; }",
+                    [](ASTContext &, Program *P) {
+                      // Compound assignments are folded into the plain
+                      // operator.
+                      auto *Stmt = static_cast<AssignmentStmt *>(firstStmt(P));
+                      REQUIRE(Stmt->Operator == Op::Add);
+                    });
+
+  test::parseSource(
+      "fun f() -> void { x <<= 1; x >>= 2; x &= 3; x |= 4; x ^= 5; }",
+      [](ASTContext &, Program *P) {
+        auto *Fn = static_cast<FunctionDecl *>(P->Objects[0]->Decl);
+        const Op Expected[] = {Op::LShift, Op::RShift, Op::BitAnd, Op::BitOr,
+                               Op::BitXor};
+        for (size_t I = 0; I < 5; ++I) {
+          auto *Stmt = static_cast<AssignmentStmt *>(Fn->Body->Statements[I]);
+          REQUIRE(Stmt->Operator == Expected[I]);
+        }
+      });
 }
 
 TEST_CASE("Statement order is preserved", "[statements]") {

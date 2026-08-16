@@ -35,6 +35,7 @@ MOD_ASSIGNMENT  : '%=';
 ARROW           : '->';
 DOUBLE_COLON    : '::';
 ELVIS           : '?:';
+QUEST_DOT       : '?.';
 
 EQ  : '==';
 NEQ : '!=';
@@ -51,7 +52,8 @@ BIT_OR  : '|';
 BIT_XOR : '^';
 BIT_NOT : '~';
 LSHIFT  : '<<';
-RSHIFT  : '>>';
+// No `RSHIFT` rule on purpose: `>>` must lex as two `GT` tokens so that
+// nested type arguments like `foo<Bar<Baz>>()` parse correctly.
 BIT_AND_ASSIGNMENT : '&=';
 BIT_OR_ASSIGNMENT  : '|=';
 BIT_XOR_ASSIGNMENT : '^=';
@@ -90,6 +92,8 @@ INT    : 'int';
 LONG   : 'long';
 FLOAT  : 'float';
 DOUBLE : 'double';
+CHAR   : 'char';
+STRING : 'string';
 
 //
 // Modifiers
@@ -130,9 +134,14 @@ INTEGER_LITERAL:
 // Floating Point Literals
 //
 
-FLOAT_LITERAL: DOUBLE_LITERAL [fF] | INTEGER_LITERAL [fF];
+FLOAT_LITERAL: DOUBLE_LITERAL [fF] | DEC_INTEGER_LITERAL [fF];
 
-DOUBLE_LITERAL: DEC_DIGIT+? DOT DEC_DIGIT+ DOUBLE_EXPONENT? | DEC_DIGIT+ DOUBLE_EXPONENT;
+// Leading zeros are rejected, like in `DEC_INTEGER_LITERAL`: `01.5` must
+// lex as `0` + `1.5` (a syntax error), not as a single token.
+DOUBLE_LITERAL
+    : DEC_DIGIT_NO_ZERO DEC_DIGIT* (DOT DEC_DIGIT+ DOUBLE_EXPONENT? | DOUBLE_EXPONENT)
+    | '0' DOT DEC_DIGIT+ DOUBLE_EXPONENT?
+    ;
 
 fragment DOUBLE_EXPONENT: [eE] [+-]? DEC_DIGIT+;
 
@@ -154,6 +163,22 @@ fragment OCT_DIGIT: [0-7];
 BIN_INTEGER_LITERAL: '0' [bB] BIN_DIGIT+;
 
 fragment BIN_DIGIT: [01];
+
+//
+// String and Character Literals
+//
+
+STRING_LITERAL: '"' (UNICODE_ESCAPE | ESCAPE_SEQUENCE | ~["\\\r\n])* '"';
+
+CHAR_LITERAL: '\'' (UNICODE_ESCAPE | ESCAPE_SEQUENCE | ~['\\\r\n]) '\'';
+
+fragment ESCAPE_SEQUENCE: '\\' ~[\r\n];
+
+fragment UNICODE_ESCAPE: '\\u' HEX_DIGIT HEX_DIGIT HEX_DIGIT HEX_DIGIT;
+
+// TODO Raw string literals are not implemented yet. Recognizing the opening
+// delimiter turns a cascade of string tokens into one clear parser error.
+RAW_STRING_START: '"""';
 
 //
 // Identifiers

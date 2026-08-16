@@ -4,14 +4,17 @@
 
 namespace astra::basic {
 
-bool convertFloatString(llvm::APFloat &Value, llvm::StringRef Text,
-                        llvm::APFloat::roundingMode RM) {
+llvm::APFloat::opStatus convertFloatString(llvm::APFloat &Value,
+                                           llvm::StringRef Text,
+                                           llvm::APFloat::roundingMode RM) {
   auto Parsed = Value.convertFromString(Text, RM);
   if (!Parsed) {
     llvm::consumeError(Parsed.takeError());
-    return false;
+    // `opInvalidOp` doubles as the parse-failure marker: a successful
+    // conversion never returns it.
+    return llvm::APFloat::opInvalidOp;
   }
-  return true;
+  return *Parsed;
 }
 
 } // namespace astra::basic
