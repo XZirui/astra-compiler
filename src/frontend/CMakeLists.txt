@@ -24,6 +24,7 @@ target_include_directories(astra-frontend
 
 target_link_libraries(astra-frontend
         PUBLIC
+        astra-basic
         astra-ast
         astra-parser
         ${llvm_libs}

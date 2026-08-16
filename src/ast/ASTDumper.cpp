@@ -2,6 +2,7 @@
 
 #include "astra/ast/Program.h"
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/ErrorHandling.h>
 
 namespace astra::ast {
 
@@ -67,8 +68,7 @@ llvm::StringRef ASTDumper::getOpSymbol(Op Operator) {
   case Op::Assignment:
     return "=";
   }
-  assert(false && "Unknown ast::Op.");
-  return llvm::StringRef();
+  llvm_unreachable("Unknown ast::Op.");
 }
 
 llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Type) {
@@ -86,8 +86,7 @@ llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Type) {
   case BuiltinType::Double:
     return "Double";
   }
-  assert(false && "Unknown BuiltinType.");
-  return llvm::StringRef();
+  llvm_unreachable("Unknown BuiltinType.");
 }
 
 void ASTDumper::dumpHeader(const ASTNode *Node) {

@@ -1,2 +1,3 @@
+add_subdirectory(basic)
 add_subdirectory(ast)
 add_subdirectory(frontend)

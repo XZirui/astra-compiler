@@ -38,9 +38,10 @@ int main(int argc, char **argv) {
       SrcMgr.AddNewSourceBuffer(std::move(*FileOrErr), llvm::SMLoc());
 
   astra::ast::ASTContext Ctx(SrcMgr);
-  auto *Program = astra::frontend::parse(Ctx, SrcMgr, FileID);
+  astra::basic::DiagnosticsEngine Diags(SrcMgr);
+  auto *Program = astra::frontend::parse(Ctx, SrcMgr, FileID, Diags);
   if (!Program) {
-    // `parse` reports syntax errors through ANTLR's default listeners.
+    Diags.print(llvm::errs());
     return 1;
   }
 

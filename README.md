@@ -65,8 +65,6 @@ Program
       `- Body
         `- Block
 ```
-```
-```
 
 - `--dump-ast=false` suppresses the dump (the dump is the only output for
   now, so it defaults to on).

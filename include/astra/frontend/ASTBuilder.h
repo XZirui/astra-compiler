@@ -4,6 +4,7 @@
 #include "astra/ast/IdentifierInfo.h"
 #include "astra/ast/Program.h"
 #include "astra/ast/Statement.h"
+#include "astra/basic/DiagnosticsEngine.h"
 #include "astra/parser/AstraParser.h"
 #include "astra/parser/AstraParserBaseVisitor.h"
 #include "llvm/Support/SMLoc.h"
@@ -22,11 +23,15 @@ class ASTBuilder : public AstraParserBaseVisitor {
   llvm::SourceMgr &SourceMgr;
   /// The `FileID` of the buffer currently being parsed.
   unsigned CurrentFile;
+  /// Collects diagnostics for errors the builder detects (e.g. unimplemented
+  /// constructs); the builder degrades gracefully instead of asserting.
+  basic::DiagnosticsEngine &Diags;
 
 public:
-  ASTBuilder(ast::ASTContext &ASTContext, unsigned FileID)
+  ASTBuilder(ast::ASTContext &ASTContext, unsigned FileID,
+             basic::DiagnosticsEngine &Diags)
       : ASTContext(ASTContext), SourceMgr(ASTContext.getSourceMgr()),
-        CurrentFile(FileID) {}
+        CurrentFile(FileID), Diags(Diags) {}
 
   /// Visit the file parse tree and return the resulting `Program`.
   ast::Program *build(AstraParser::FileContext *Ctx) {

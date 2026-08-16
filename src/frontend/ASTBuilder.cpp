@@ -1,9 +1,10 @@
 #include "astra/frontend/ASTBuilder.h"
 
 #include "astra/ast/Program.h"
+#include "astra/basic/FloatParse.h"
 #include "astra/parser/AstraParser.h"
 #include <llvm/ADT/STLExtras.h>
-#include <llvm/Support/Error.h>
+#include <llvm/Support/ErrorHandling.h>
 
 namespace astra::frontend {
 
@@ -67,9 +68,8 @@ static ast::Op getBinaryOp(int TokenType) {
   case AstraParser::BIT_XOR:
     return ast::Op::BitXor;
   default:
-    // Shouldn't be here!
-    assert(false && "Unknown binary operator.");
-    return ast::Op::Add;
+    // The token types above are the only binary operators the grammar allows.
+    llvm_unreachable("Unknown binary operator.");
   }
 }
 
@@ -85,9 +85,8 @@ static ast::Op getPrefixUnaryOp(int TokenType) {
   case AstraParser::BIT_NOT:
     return ast::Op::BitNot;
   default:
-    // Shouldn't be here!
-    assert(false && "Unknown prefix unary operator.");
-    return ast::Op::Add;
+    // The token types above are the only prefix operators the grammar allows.
+    llvm_unreachable("Unknown prefix unary operator.");
   }
 }
 
@@ -259,8 +258,8 @@ std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
     Result->Type = ast::BuiltinType::Double;
     break;
   default:
-    // Shouldn't be here!
-    assert(false && "Unknown builtin type.");
+    // The token types above are the only builtin types the grammar allows.
+    llvm_unreachable("Unknown builtin type.");
   }
   return static_cast<ast::Type *>(Result);
 }
@@ -322,8 +321,9 @@ std::any ASTBuilder::visitAssignment(AstraParser::AssignmentContext *Ctx) {
     Result->Operator = ast::Op::Mod;
     break;
   default:
-    // Shouldn't be here!
-    assert(false && "Unknown assignment operator.");
+    // The token types above are the only assignment operators the grammar
+    // allows.
+    llvm_unreachable("Unknown assignment operator.");
   }
 
   return static_cast<ast::Statement *>(Result);
@@ -352,7 +352,8 @@ std::any ASTBuilder::visitForStmt(AstraParser::ForStmtContext *Ctx) {
   }
   Result->Body = getBlock(Ctx->block());
 
-  // std::any requires the exact type: ForStmt* would not match any_cast<Statement*>.
+  // std::any requires the exact type: ForStmt* would not match
+  // any_cast<Statement*>.
   return static_cast<ast::Statement *>(Result);
 }
 
@@ -620,7 +621,8 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
       Result = Member;
     } else {
       // TODO type arguments, e.g. `foo<Int>`
-      assert(Postfix->typeArguments() && "Unknown postfix expression.");
+      Diags.report(getRange(Postfix), llvm::SourceMgr::DK_Error,
+                   "type arguments are not implemented yet");
     }
   }
   return static_cast<ast::Expr *>(Result);
@@ -672,10 +674,11 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
       Text = Text.drop_front(2);
     }
     llvm::APInt Raw;
-    // The call must stay outside the assert: NDEBUG would otherwise skip the
-    // parse and leave `Raw` empty.
     if (Text.getAsInteger(Radix, Raw)) {
-      assert(false && "Invalid integer literal.");
+      // Unreachable for tokens the lexer accepted; degrade instead of crash.
+      Diags.report(Result->Range, llvm::SourceMgr::DK_Error,
+                   "invalid integer literal");
+      return static_cast<ast::Expr *>(Result);
     }
     // `getAsInteger` produces the minimal bit width (e.g. 8 bits for 0xFF).
     // Zero-extend to 64 bits so the value is not sign-truncated by the
@@ -694,9 +697,13 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
   if (Ctx->FLOAT_LITERAL()) {
     Text = Text.drop_back(); // strip the trailing 'f'/'F' suffix
   }
-  auto Parsed =
-      Value.convertFromString(Text, llvm::APFloat::rmNearestTiesToEven);
-  assert(Parsed && "Invalid floating-point literal.");
+  if (!basic::convertFloatString(Value, Text,
+                                 llvm::APFloat::rmNearestTiesToEven)) {
+    // Unreachable for tokens the lexer accepted; degrade instead of crash.
+    Diags.report(Result->Range, llvm::SourceMgr::DK_Error,
+                 "invalid floating-point literal");
+    return static_cast<ast::Expr *>(Result);
+  }
   Result->Value = std::move(Value);
   return static_cast<ast::Expr *>(Result);
 }
