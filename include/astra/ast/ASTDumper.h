@@ -41,7 +41,7 @@ class ASTDumper {
   /// Return the source spelling of `Operator` as printed in the dump.
   static llvm::StringRef getOpSymbol(Op Operator);
   /// Return the spelling of a builtin type kind as printed in the dump.
-  static llvm::StringRef getBuiltinTypeName(BuiltinType::Ty Type);
+  static llvm::StringRef getBuiltinTypeName(BuiltinType::Ty Value);
   /// Return the spelling of a visibility as printed in the dump.
   static llvm::StringRef getVisibilityName(Visibility Vis);
 
@@ -63,9 +63,9 @@ class ASTDumper {
 public:
   explicit ASTDumper(llvm::raw_ostream &OS) : OS(OS) {}
 
-  void dump(const Program *Program);
+  void dump(const Program *P);
 };
 
 /// Dump `Program` to `OS`.
-void dump(const Program *Program, llvm::raw_ostream &OS);
+void dump(const Program *P, llvm::raw_ostream &OS);
 } // namespace astra::ast

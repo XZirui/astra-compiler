@@ -8,6 +8,7 @@
 #include <llvm/ADT/SmallVector.h>
 
 namespace astra::ast {
+struct ClassDecl;
 struct Type;
 
 /// Base class of all expressions.
@@ -89,7 +90,13 @@ struct CharLiteral : LiteralConstant {
 };
 
 struct VarExpr : Expr {
-  llvm::StringRef Name;
+  /// The referenced name, interned by the `ASTContext`.
+  IdentifierInfo *Name = nullptr;
+  /// The declaration this reference resolves to, set by semantic analysis.
+  /// Valid targets: `FunctionDecl`, `VarDecl`, `Parameter` or `ForEachStmt`
+  /// (the loop variable has no declaration node of its own; the statement
+  /// itself is the binding). `nullptr` when the name could not be resolved.
+  ASTNode *Decl = nullptr;
 
   VarExpr() { Kind = NodeKind::VarExpr; }
   static bool classof(const ASTNode *Node) {
@@ -283,6 +290,10 @@ struct AsExpr : Expr {
 };
 
 struct ThisExpr : Expr {
+  /// The innermost enclosing class, set by semantic analysis. `nullptr`
+  /// outside any class member.
+  ClassDecl *EnclosingClass = nullptr;
+
   ThisExpr() { Kind = NodeKind::ThisExpr; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::ThisExpr;

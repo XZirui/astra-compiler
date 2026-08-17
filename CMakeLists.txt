@@ -15,6 +15,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # The ANTLR-generated parser/lexer code requires RTTI and re-enables it
 # in grammars/CMakeLists.txt.
 add_compile_options(-fno-rtti)
+# The strict warning flags live in src/, tests/ and tools/ (project code only):
+# `add_compile_options` is a directory property that propagates to targets
+# created in this directory and below, so setting it here would also apply to
+# third-party sources built by FetchContent (Catch2). Project subdirectories
+# opt into the warnings explicitly.
 
 # Options
 option(BUILD_TOOLS "Build tools" ON)
@@ -32,12 +37,15 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 # Antlr4
 set_property(DIRECTORY PROPERTY EP_UPDATE_DISCONNECTED TRUE)
 include(ExternalAntlr4Cpp)
-include_directories(${ANTLR4_INCLUDE_DIRS})
+# SYSTEM: treat third-party headers as system headers (-isystem), so the
+# strict warning flags above do not fire inside them.
+include_directories(SYSTEM ${ANTLR4_INCLUDE_DIRS})
 find_package(ANTLR REQUIRED)
 
 # LLVM
 find_package(LLVM REQUIRED CONFIG)
-include_directories(${LLVM_INCLUDE_DIRS})
+# SYSTEM: as above — LLVM headers must not be subject to our warnings.
+include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 Include(FetchContent)
@@ -64,7 +72,8 @@ endif ()
 
 # format
 file(GLOB_RECURSE ALL_SOURCE_FILE
-        src/*.cpp include/*.h tests/*.h tests/*.cpp tools/*.h tools/*.cpp)
+        src/*.cpp include/*.h include/*.def tests/*.h tests/*.cpp tools/*.h
+        tools/*.cpp)
 
 add_custom_target(
         format

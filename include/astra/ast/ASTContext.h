@@ -16,14 +16,14 @@ namespace astra::ast {
 class ASTContext : public llvm::RefCountedBase<ASTContext> {
   /// The arena backing every allocation the context hands out.
   mutable llvm::BumpPtrAllocator BumpAlloc;
-  llvm::SourceMgr &SourceMgr;
+  llvm::SourceMgr &SrcMgr;
   /// The interning table of identifiers, keyed by their spelling.
   llvm::StringMap<IdentifierInfo *> Identifiers;
 
 public:
   /// Construct a context for `SrcMgr`. The context is owned by the caller,
   /// which is also responsible for destroying it.
-  explicit ASTContext(llvm::SourceMgr &SrcMgr) : SourceMgr(SrcMgr) {}
+  explicit ASTContext(llvm::SourceMgr &SrcMgr) : SrcMgr(SrcMgr) {}
 
   /// Get the interned `IdentifierInfo` for `Name`, creating it on first use.
   /// @param Name The identifier text. It must point to stable memory, e.g.
@@ -41,7 +41,7 @@ public:
     return Info;
   }
 
-  llvm::SourceMgr &getSourceMgr() { return SourceMgr; }
+  llvm::SourceMgr &getSourceMgr() { return SrcMgr; }
 
   llvm::BumpPtrAllocator &getAllocator() const { return BumpAlloc; }
 

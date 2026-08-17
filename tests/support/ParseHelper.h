@@ -25,18 +25,18 @@ void parseSourceWithDiags(llvm::StringRef Src, FnTy &&Fn) {
 
   ast::ASTContext Ctx(SrcMgr);
   basic::DiagnosticsEngine Diags(SrcMgr);
-  ast::Program *Program = frontend::parse(Ctx, SrcMgr, FileID, Diags);
-  Fn(Ctx, Program, Diags);
+  ast::Program *Prog = frontend::parse(Ctx, SrcMgr, FileID, Diags);
+  Fn(Ctx, Prog, Diags);
 }
 
 /// Like `parseSourceWithDiags`, but requires a successful parse; used by
 /// tests that only exercise valid programs.
 template <typename FnTy> void parseSource(llvm::StringRef Src, FnTy &&Fn) {
-  parseSourceWithDiags(Src, [&](ast::ASTContext &Ctx, ast::Program *Program,
+  parseSourceWithDiags(Src, [&](ast::ASTContext &Ctx, ast::Program *Prog,
                                 basic::DiagnosticsEngine &Diags) {
-    REQUIRE(Program != nullptr);
+    REQUIRE(Prog != nullptr);
     REQUIRE(!Diags.hasErrors());
-    Fn(Ctx, Program);
+    Fn(Ctx, Prog);
   });
 }
 

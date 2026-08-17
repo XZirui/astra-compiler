@@ -8,7 +8,7 @@ void DiagnosticsEngine::report(llvm::SMRange Range,
                                llvm::SourceMgr::DiagKind Kind,
                                llvm::StringRef Message) {
   Diagnostics.push_back(
-      SourceMgr.GetMessage(Range.Start, Kind, Message, llvm::SMRange(Range)));
+      SrcMgr.GetMessage(Range.Start, Kind, Message, llvm::SMRange(Range)));
   HasErrors = (Kind == llvm::SourceMgr::DK_Error) ? true : HasErrors;
 }
 
@@ -21,7 +21,7 @@ bool DiagnosticsEngine::hasErrors() const { return HasErrors; }
 
 void DiagnosticsEngine::print(llvm::raw_ostream &OS) {
   for (const auto &D : Diagnostics) {
-    SourceMgr.PrintMessage(OS, D);
+    SrcMgr.PrintMessage(OS, D);
   }
   Diagnostics.clear();
   HasErrors = false;

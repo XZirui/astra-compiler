@@ -24,8 +24,11 @@ public:
   void syntaxError(antlr4::Recognizer *, antlr4::Token *, size_t Line,
                    size_t CharPos, const std::string &Msg,
                    std::exception_ptr) override {
-    // ANTLR columns are 0-based; LLVM's are 1-based.
-    auto Loc = SrcMgr.FindLocForLineAndColumn(FileID, Line, CharPos + 1);
+    // ANTLR columns are 0-based; LLVM's are 1-based. Line/column numbers
+    // cannot exceed `unsigned` for any real file, so the conversion is safe.
+    auto Loc =
+        SrcMgr.FindLocForLineAndColumn(FileID, static_cast<unsigned>(Line),
+                                       static_cast<unsigned>(CharPos) + 1);
     Diags.report(Loc, llvm::SourceMgr::DK_Error, Msg);
   }
 };

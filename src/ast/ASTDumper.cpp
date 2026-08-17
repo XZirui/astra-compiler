@@ -2,6 +2,7 @@
 
 #include "astra/ast/Program.h"
 #include <llvm/ADT/SmallString.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/ErrorHandling.h>
 
 namespace astra::ast {
@@ -71,8 +72,8 @@ llvm::StringRef ASTDumper::getOpSymbol(Op Operator) {
   llvm_unreachable("Unknown ast::Op.");
 }
 
-llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Type) {
-  switch (Type) {
+llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Value) {
+  switch (Value) {
   case BuiltinType::Void:
     return "Void";
   case BuiltinType::Bool:
@@ -114,19 +115,19 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "TopLevelObject";
     break;
   case NodeKind::FunctionDecl: {
-    auto *Fn = static_cast<const FunctionDecl *>(Node);
+    auto *Fn = llvm::cast<const FunctionDecl>(Node);
     OS << "FunctionDecl '" << Fn->Name->getName() << "' ["
        << getVisibilityName(Fn->Vis) << "]";
     break;
   }
   case NodeKind::ClassDecl: {
-    auto *Cls = static_cast<const ClassDecl *>(Node);
+    auto *Cls = llvm::cast<const ClassDecl>(Node);
     OS << "ClassDecl '" << Cls->Name->getName() << "' ["
        << getVisibilityName(Cls->Vis) << "]";
     break;
   }
   case NodeKind::VarDecl: {
-    auto *Var = static_cast<const VarDecl *>(Node);
+    auto *Var = llvm::cast<const VarDecl>(Node);
     OS << "VarDecl '" << Var->Name->getName() << "' ["
        << getVisibilityName(Var->Vis) << "]";
     if (Var->IsMutable) {
@@ -135,12 +136,12 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::Parameter: {
-    auto *Param = static_cast<const Parameter *>(Node);
+    auto *Param = llvm::cast<const Parameter>(Node);
     OS << "Parameter '" << Param->Name->getName() << "'";
     break;
   }
   case NodeKind::TypeRef: {
-    auto *Ref = static_cast<const TypeRef *>(Node);
+    auto *Ref = llvm::cast<const TypeRef>(Node);
     OS << "TypeRef '" << Ref->Name->getName() << "'";
     // `Box<>` and `Box` differ: the empty list forces default parameters.
     if (Ref->ExplicitTypeArgs) {
@@ -149,8 +150,8 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::BuiltinType: {
-    auto *Ty = static_cast<const BuiltinType *>(Node);
-    OS << "BuiltinType '" << getBuiltinTypeName(Ty->Type) << "'";
+    auto *B = llvm::cast<const BuiltinType>(Node);
+    OS << "BuiltinType '" << getBuiltinTypeName(B->Value) << "'";
     break;
   }
   case NodeKind::ArrayType:
@@ -169,7 +170,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "ExprStmt";
     break;
   case NodeKind::AssignmentStmt: {
-    auto *Stmt = static_cast<const AssignmentStmt *>(Node);
+    auto *Stmt = llvm::cast<const AssignmentStmt>(Node);
     OS << "AssignmentStmt '" << getOpSymbol(Stmt->Operator) << "'";
     break;
   }
@@ -180,7 +181,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "ForStmt";
     break;
   case NodeKind::ForEachStmt: {
-    auto *Stmt = static_cast<const ForEachStmt *>(Node);
+    auto *Stmt = llvm::cast<const ForEachStmt>(Node);
     OS << "ForEachStmt '" << Stmt->VarName << "'";
     break;
   }
@@ -197,12 +198,12 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "NullLiteral";
     break;
   case NodeKind::BoolLiteral: {
-    auto *Lit = static_cast<const BoolLiteral *>(Node);
+    auto *Lit = llvm::cast<const BoolLiteral>(Node);
     OS << "BoolLiteral '" << (Lit->Value ? "true" : "false") << "'";
     break;
   }
   case NodeKind::IntLiteral: {
-    auto *Lit = static_cast<const IntLiteral *>(Node);
+    auto *Lit = llvm::cast<const IntLiteral>(Node);
     OS << "IntLiteral '";
     llvm::SmallString<32> Buf;
     Lit->Value.toString(Buf, 10);
@@ -210,7 +211,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::FloatLiteral: {
-    auto *Lit = static_cast<const FloatLiteral *>(Node);
+    auto *Lit = llvm::cast<const FloatLiteral>(Node);
     OS << "FloatLiteral '";
     llvm::SmallString<64> Buf;
     Lit->Value.toString(Buf);
@@ -218,7 +219,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::StringLiteral: {
-    auto *Lit = static_cast<const StringLiteral *>(Node);
+    auto *Lit = llvm::cast<const StringLiteral>(Node);
     OS << "StringLiteral '";
     for (char C : Lit->Value) {
       // Escape backslashes, line breaks and other control characters so the
@@ -252,7 +253,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::CharLiteral: {
-    auto *Lit = static_cast<const CharLiteral *>(Node);
+    auto *Lit = llvm::cast<const CharLiteral>(Node);
     OS << "CharLiteral ";
     if (Lit->Value >= 32 && Lit->Value < 127) {
       OS << "'" << static_cast<char>(Lit->Value) << "'";
@@ -263,22 +264,22 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::VarExpr: {
-    auto *E = static_cast<const VarExpr *>(Node);
-    OS << "VarExpr '" << E->Name << "'";
+    auto *E = llvm::cast<const VarExpr>(Node);
+    OS << "VarExpr '" << E->Name->getName() << "'";
     break;
   }
   case NodeKind::UnaryExpr: {
-    auto *E = static_cast<const UnaryExpr *>(Node);
+    auto *E = llvm::cast<const UnaryExpr>(Node);
     OS << "UnaryExpr '" << getOpSymbol(E->Operator) << "'";
     break;
   }
   case NodeKind::BinaryExpr: {
-    auto *E = static_cast<const BinaryExpr *>(Node);
+    auto *E = llvm::cast<const BinaryExpr>(Node);
     OS << "BinaryExpr '" << getOpSymbol(E->Operator) << "'";
     break;
   }
   case NodeKind::ComparisonChainExpr: {
-    auto *E = static_cast<const ComparisonChainExpr *>(Node);
+    auto *E = llvm::cast<const ComparisonChainExpr>(Node);
     OS << "ComparisonChainExpr";
     for (Op Operator : E->Operators) {
       OS << " '" << getOpSymbol(Operator) << "'";
@@ -295,7 +296,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "ReturnExpr";
     break;
   case NodeKind::ContinueExpr: {
-    auto *E = static_cast<const ContinueExpr *>(Node);
+    auto *E = llvm::cast<const ContinueExpr>(Node);
     OS << "ContinueExpr";
     if (E->Pos) {
       OS << " '" << E->Pos->Name->getName() << "'";
@@ -303,7 +304,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::BreakExpr: {
-    auto *E = static_cast<const BreakExpr *>(Node);
+    auto *E = llvm::cast<const BreakExpr>(Node);
     OS << "BreakExpr";
     if (E->Pos) {
       OS << " '" << E->Pos->Name->getName() << "'";
@@ -311,7 +312,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   }
   case NodeKind::CallExpr: {
-    auto *E = static_cast<const CallExpr *>(Node);
+    auto *E = llvm::cast<const CallExpr>(Node);
     OS << "CallExpr";
     // `foo<>()` and `foo()` differ: the empty list forces default parameters.
     if (E->ExplicitTypeArgs) {
@@ -323,7 +324,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "IndexExpr";
     break;
   case NodeKind::MemberExpr: {
-    auto *E = static_cast<const MemberExpr *>(Node);
+    auto *E = llvm::cast<const MemberExpr>(Node);
     OS << "MemberExpr '" << E->Member << "'";
     if (E->NullSafe) {
       OS << " [nullsafe]";
@@ -334,7 +335,7 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "IsExpr";
     break;
   case NodeKind::AsExpr: {
-    auto *E = static_cast<const AsExpr *>(Node);
+    auto *E = llvm::cast<const AsExpr>(Node);
     OS << "AsExpr";
     if (E->NullSafe) {
       OS << " [nullsafe]";
@@ -348,17 +349,17 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "CollectionExpr";
     break;
   case NodeKind::Label: {
-    auto *Lbl = static_cast<const Label *>(Node);
+    auto *Lbl = llvm::cast<const Label>(Node);
     OS << "Label '" << Lbl->Name->getName() << "'";
     break;
   }
   case NodeKind::TypeParam: {
-    auto *Param = static_cast<const TypeParam *>(Node);
+    auto *Param = llvm::cast<const TypeParam>(Node);
     OS << "TypeParam '" << Param->Name->getName() << "'";
     break;
   }
   case NodeKind::CatchClause: {
-    auto *Clause = static_cast<const CatchClause *>(Node);
+    auto *Clause = llvm::cast<const CatchClause>(Node);
     OS << "CatchClause '" << Clause->Param->Name->getName() << "'";
     break;
   }
@@ -375,77 +376,77 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     // Handled directly by `dump`.
     break;
   case NodeKind::TopLevelObject: {
-    auto *Obj = static_cast<const TopLevelObject *>(Node);
+    auto *Obj = llvm::cast<const TopLevelObject>(Node);
     pushChild(Children, "Decl", Obj->Decl);
     break;
   }
   case NodeKind::FunctionDecl: {
-    auto *Fn = static_cast<const FunctionDecl *>(Node);
+    auto *Fn = llvm::cast<const FunctionDecl>(Node);
     appendChildren(Children, Fn->Parameters);
     pushChild(Children, "ReturnType", Fn->ReturnType);
     pushChild(Children, "Body", Fn->Body);
     break;
   }
   case NodeKind::ClassDecl: {
-    auto *Cls = static_cast<const ClassDecl *>(Node);
+    auto *Cls = llvm::cast<const ClassDecl>(Node);
     appendChildren(Children, Cls->TypeParams);
     appendChildren(Children, Cls->Members);
     break;
   }
   case NodeKind::VarDecl: {
-    auto *Var = static_cast<const VarDecl *>(Node);
+    auto *Var = llvm::cast<const VarDecl>(Node);
     pushChild(Children, "VarType", Var->VarType);
     pushChild(Children, "Value", Var->Value);
     break;
   }
   case NodeKind::Parameter: {
-    auto *Param = static_cast<const Parameter *>(Node);
-    pushChild(Children, "Type", Param->Type);
+    auto *Param = llvm::cast<const Parameter>(Node);
+    pushChild(Children, "Type", Param->ParamType);
     pushChild(Children, "DefaultValue", Param->DefaultValue);
     break;
   }
   case NodeKind::ArrayType: {
-    auto *Ty = static_cast<const ArrayType *>(Node);
+    auto *Ty = llvm::cast<const ArrayType>(Node);
     pushChild(Children, "ElementType", Ty->ElementType);
     pushChild(Children, "Size", Ty->Size);
     break;
   }
   case NodeKind::FunctionType: {
-    auto *Ty = static_cast<const FunctionType *>(Node);
+    auto *Ty = llvm::cast<const FunctionType>(Node);
     appendChildren(Children, Ty->Parameters);
     pushChild(Children, "ReturnType", Ty->ReturnType);
     break;
   }
   case NodeKind::Block: {
-    auto *Blk = static_cast<const Block *>(Node);
+    auto *Blk = llvm::cast<const Block>(Node);
     appendChildren(Children, Blk->Statements);
     break;
   }
   case NodeKind::DeclStatement: {
-    auto *Stmt = static_cast<const DeclStatement *>(Node);
-    pushChild(Children, "Declaration", Stmt->Declaration);
+    auto *Stmt = llvm::cast<const DeclStatement>(Node);
+    pushChild(Children, "Declaration", Stmt->Decl);
     break;
   }
   case NodeKind::ExprStmt: {
-    auto *Stmt = static_cast<const ExprStmt *>(Node);
+    auto *Stmt = llvm::cast<const ExprStmt>(Node);
     pushChild(Children, "Expression", Stmt->Expression);
     break;
   }
   case NodeKind::AssignmentStmt: {
-    auto *Stmt = static_cast<const AssignmentStmt *>(Node);
+    auto *Stmt = llvm::cast<const AssignmentStmt>(Node);
     pushChild(Children, "LHS", Stmt->LHS);
     pushChild(Children, "RHS", Stmt->RHS);
     break;
   }
   case NodeKind::IfStmt: {
-    auto *Stmt = static_cast<const IfStmt *>(Node);
+    auto *Stmt = llvm::cast<const IfStmt>(Node);
     pushChild(Children, "Condition", Stmt->Condition);
     pushChild(Children, "Then", Stmt->Then);
     pushChild(Children, "Else", Stmt->Else);
     break;
   }
   case NodeKind::ForStmt: {
-    auto *Stmt = static_cast<const ForStmt *>(Node);
+    auto *Stmt = llvm::cast<const ForStmt>(Node);
     appendChildren(Children, Stmt->InitStmts);
     pushChild(Children, "Condition", Stmt->Condition);
     pushChild(Children, "Update", Stmt->Update);
@@ -453,65 +454,65 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     break;
   }
   case NodeKind::ForEachStmt: {
-    auto *Stmt = static_cast<const ForEachStmt *>(Node);
+    auto *Stmt = llvm::cast<const ForEachStmt>(Node);
     pushChild(Children, "Scope", Stmt->Scope);
     pushChild(Children, "Body", Stmt->Body);
     break;
   }
   case NodeKind::WhileStmt: {
-    auto *Stmt = static_cast<const WhileStmt *>(Node);
+    auto *Stmt = llvm::cast<const WhileStmt>(Node);
     pushChild(Children, "Condition", Stmt->Condition);
     pushChild(Children, "Body", Stmt->Body);
     break;
   }
   case NodeKind::DoWhileStmt: {
-    auto *Stmt = static_cast<const DoWhileStmt *>(Node);
+    auto *Stmt = llvm::cast<const DoWhileStmt>(Node);
     pushChild(Children, "Body", Stmt->Body);
     pushChild(Children, "Condition", Stmt->Condition);
     break;
   }
   case NodeKind::TryStmt: {
-    auto *Stmt = static_cast<const TryStmt *>(Node);
+    auto *Stmt = llvm::cast<const TryStmt>(Node);
     pushChild(Children, "Body", Stmt->Body);
     appendChildren(Children, Stmt->CatchClauses);
     pushChild(Children, "Finally", Stmt->Finally);
     break;
   }
   case NodeKind::IfExpr: {
-    auto *E = static_cast<const IfExpr *>(Node);
+    auto *E = llvm::cast<const IfExpr>(Node);
     pushChild(Children, "Condition", E->Condition);
     pushChild(Children, "Then", E->Then);
     pushChild(Children, "Else", E->Else);
     break;
   }
   case NodeKind::ThrowExpr: {
-    auto *E = static_cast<const ThrowExpr *>(Node);
+    auto *E = llvm::cast<const ThrowExpr>(Node);
     pushChild(Children, "Content", E->Content);
     break;
   }
   case NodeKind::ReturnExpr: {
-    auto *E = static_cast<const ReturnExpr *>(Node);
+    auto *E = llvm::cast<const ReturnExpr>(Node);
     pushChild(Children, "Value", E->Value);
     break;
   }
   case NodeKind::UnaryExpr: {
-    auto *E = static_cast<const UnaryExpr *>(Node);
+    auto *E = llvm::cast<const UnaryExpr>(Node);
     pushChild(Children, "Operand", E->Operand);
     break;
   }
   case NodeKind::BinaryExpr: {
-    auto *E = static_cast<const BinaryExpr *>(Node);
+    auto *E = llvm::cast<const BinaryExpr>(Node);
     pushChild(Children, "LHS", E->LHS);
     pushChild(Children, "RHS", E->RHS);
     break;
   }
   case NodeKind::ComparisonChainExpr: {
-    auto *E = static_cast<const ComparisonChainExpr *>(Node);
+    auto *E = llvm::cast<const ComparisonChainExpr>(Node);
     appendChildren(Children, E->Operands);
     break;
   }
   case NodeKind::CallExpr: {
-    auto *E = static_cast<const CallExpr *>(Node);
+    auto *E = llvm::cast<const CallExpr>(Node);
     pushChild(Children, "Callee", E->Callee);
     // Type arguments precede the argument list in source order.
     appendChildren(Children, E->TypeArgs);
@@ -519,45 +520,45 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     break;
   }
   case NodeKind::IndexExpr: {
-    auto *E = static_cast<const IndexExpr *>(Node);
+    auto *E = llvm::cast<const IndexExpr>(Node);
     pushChild(Children, "Base", E->Base);
     pushChild(Children, "Index", E->Index);
     break;
   }
   case NodeKind::MemberExpr: {
-    auto *E = static_cast<const MemberExpr *>(Node);
+    auto *E = llvm::cast<const MemberExpr>(Node);
     pushChild(Children, "Base", E->Base);
     break;
   }
   case NodeKind::IsExpr: {
-    auto *E = static_cast<const IsExpr *>(Node);
+    auto *E = llvm::cast<const IsExpr>(Node);
     pushChild(Children, "Operand", E->Operand);
     pushChild(Children, "CheckType", E->CheckType);
     break;
   }
   case NodeKind::AsExpr: {
-    auto *E = static_cast<const AsExpr *>(Node);
+    auto *E = llvm::cast<const AsExpr>(Node);
     pushChild(Children, "Operand", E->Operand);
     pushChild(Children, "TargetType", E->TargetType);
     break;
   }
   case NodeKind::CollectionExpr: {
-    auto *E = static_cast<const CollectionExpr *>(Node);
+    auto *E = llvm::cast<const CollectionExpr>(Node);
     appendChildren(Children, E->Elements);
     break;
   }
   case NodeKind::TypeRef: {
-    auto *Ref = static_cast<const TypeRef *>(Node);
+    auto *Ref = llvm::cast<const TypeRef>(Node);
     appendChildren(Children, Ref->TypeArgs);
     break;
   }
   case NodeKind::TypeParam: {
-    auto *Param = static_cast<const TypeParam *>(Node);
+    auto *Param = llvm::cast<const TypeParam>(Node);
     pushChild(Children, "DefaultType", Param->DefaultType);
     break;
   }
   case NodeKind::CatchClause: {
-    auto *Clause = static_cast<const CatchClause *>(Node);
+    auto *Clause = llvm::cast<const CatchClause>(Node);
     pushChild(Children, "Param", Clause->Param);
     pushChild(Children, "Body", Clause->Body);
     break;
@@ -609,20 +610,20 @@ void ASTDumper::dumpNode(const ASTNode *Node, llvm::StringRef Prefix,
   dumpChildren(Children, ChildPrefix);
 }
 
-void ASTDumper::dump(const Program *Program) {
-  assert(Program && "Cannot dump a null Program.");
-  dumpHeader(Program);
+void ASTDumper::dump(const Program *P) {
+  assert(P && "Cannot dump a null Program.");
+  dumpHeader(P);
 
   llvm::SmallVector<Child, 8> Children;
-  for (auto *Obj : Program->Objects) {
+  for (auto *Obj : P->Objects) {
     Children.push_back({llvm::StringRef(), Obj});
   }
   dumpChildren(Children, "");
 }
 
-void dump(const Program *Program, llvm::raw_ostream &OS) {
+void dump(const Program *P, llvm::raw_ostream &OS) {
   ASTDumper Dumper(OS);
-  Dumper.dump(Program);
+  Dumper.dump(P);
 }
 
 } // namespace astra::ast

@@ -43,7 +43,7 @@ TEST_CASE("Lexer errors are reported", "[diag]") {
 
 TEST_CASE("Empty type argument lists are accepted", "[diag]") {
   test::parseSource("var x = foo<>(); fun f() -> Box<> {}",
-                    [](ASTContext &, Program *P) {
+                    [](ASTContext &, Program *) {
                       // An empty argument list is allowed on purpose: default
                       // type parameters will fill it in, so there is no
                       // diagnostic.

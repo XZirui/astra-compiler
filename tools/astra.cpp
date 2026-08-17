@@ -1,5 +1,6 @@
 #include "astra/ast/ASTDumper.h"
 #include "astra/frontend/Parse.h"
+#include "astra/sema/Analyze.h"
 
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -43,6 +44,14 @@ int main(int argc, char **argv) {
   if (!Program || Diags.hasErrors()) {
     // The builder reports semantic-ish diagnostics (e.g. a spaced `>>`) on
     // an otherwise parseable program; never exit cleanly on an error.
+    Diags.print(llvm::errs());
+    return 1;
+  }
+
+  // Semantic analysis phase 1: symbol tables, name resolution and canonical
+  // type resolution. The results are attached to the AST nodes.
+  astra::sema::analyze(Ctx, Program, Diags);
+  if (Diags.hasErrors()) {
     Diags.print(llvm::errs());
     return 1;
   }

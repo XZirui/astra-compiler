@@ -1,8 +1,11 @@
 #pragma once
 
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_ostream.h>
+
+#include <utility>
 
 namespace astra::basic {
 
@@ -15,12 +18,12 @@ namespace astra::basic {
 /// Note: `SMDiagnostic` keeps a pointer to the `SourceMgr`, so the engine
 /// must not outlive it (the engine's own reference enforces the same rule).
 class DiagnosticsEngine {
-  llvm::SourceMgr &SourceMgr;
+  llvm::SourceMgr &SrcMgr;
   llvm::SmallVector<llvm::SMDiagnostic, 4> Diagnostics;
   bool HasErrors = false;
 
 public:
-  explicit DiagnosticsEngine(llvm::SourceMgr &SrcMgr) : SourceMgr(SrcMgr) {}
+  explicit DiagnosticsEngine(llvm::SourceMgr &SrcMgr) : SrcMgr(SrcMgr) {}
 
   /// Report a diagnostic covering `Range`. The range is highlighted with
   /// tildes when printed.
@@ -30,6 +33,14 @@ public:
   /// Report a single-point diagnostic.
   void report(llvm::SMLoc Loc, llvm::SourceMgr::DiagKind Kind,
               llvm::StringRef Message);
+
+  /// Report a formatted diagnostic (`llvm::formatv` syntax). `Fmt` must be a
+  /// null-terminated string literal.
+  template <typename... Ts>
+  void reportf(llvm::SMRange Range, llvm::SourceMgr::DiagKind Kind,
+               const char *Fmt, Ts &&...Args) {
+    report(Range, Kind, llvm::formatv(Fmt, std::forward<Ts>(Args)...).str());
+  }
 
   bool hasErrors() const;
 

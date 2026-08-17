@@ -53,7 +53,7 @@ getVisibility(AstraParser::VisibilityModifierContext *Mod) {
 }
 
 /// Map a binary operator token to the corresponding `ast::Op`.
-static ast::Op getBinaryOp(int TokenType) {
+static ast::Op getBinaryOp(size_t TokenType) {
   switch (TokenType) {
   case AstraParser::ADD:
     return ast::Op::Add;
@@ -237,7 +237,7 @@ static bool decodeCharValue(llvm::StringRef Body, uint32_t &CodePoint,
 }
 
 /// Map a prefix unary operator token to the corresponding `ast::Op`.
-static ast::Op getPrefixUnaryOp(int TokenType) {
+static ast::Op getPrefixUnaryOp(size_t TokenType) {
   switch (TokenType) {
   case AstraParser::ADD:
     return ast::Op::Add;
@@ -275,7 +275,7 @@ ast::Expr *ASTBuilder::getExpr(antlr4::tree::ParseTree *Tree) {
 
 std::any ASTBuilder::visitFile(AstraParser::FileContext *Ctx) {
   const auto &TopLevelObjects = Ctx->topLevelObject();
-  auto *Result = ASTContext.allocate<ast::Program>();
+  auto *Result = Arena.allocate<ast::Program>();
   Result->Range = getRange(Ctx);
 
   for (auto *Obj : TopLevelObjects) {
@@ -287,7 +287,7 @@ std::any ASTBuilder::visitFile(AstraParser::FileContext *Ctx) {
 std::any
 ASTBuilder::visitTopLevelObject(AstraParser::TopLevelObjectContext *Ctx) {
   // TODO other kinds
-  auto *Result = ASTContext.allocate<ast::TopLevelObject>();
+  auto *Result = Arena.allocate<ast::TopLevelObject>();
   Result->Decl = getDecl(Ctx->declaration());
   Result->Range = getRange(Ctx);
 
@@ -305,7 +305,7 @@ std::any ASTBuilder::visitDeclaration(AstraParser::DeclarationContext *Ctx) {
 }
 
 std::any ASTBuilder::visitFunctionDecl(AstraParser::FunctionDeclContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::FunctionDecl>();
+  auto *Result = Arena.allocate<ast::FunctionDecl>();
   Result->Range = getRange(Ctx);
 
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
@@ -321,13 +321,13 @@ std::any ASTBuilder::visitFunctionDecl(AstraParser::FunctionDeclContext *Ctx) {
 }
 
 std::any ASTBuilder::visitClassDecl(AstraParser::ClassDeclContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::ClassDecl>();
+  auto *Result = Arena.allocate<ast::ClassDecl>();
   Result->Range = getRange(Ctx);
 
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
   if (auto *TypeParams = Ctx->typeParameters()) {
     for (auto *Param : TypeParams->typeParameter()) {
-      auto *TypeParam = ASTContext.allocate<ast::TypeParam>();
+      auto *TypeParam = Arena.allocate<ast::TypeParam>();
       TypeParam->Range = getRange(Param);
       TypeParam->Name = getIdentifier(Param->IDENTIFIER());
       if (auto *DefaultType = Param->type()) {
@@ -348,11 +348,11 @@ std::any ASTBuilder::visitClassDecl(AstraParser::ClassDeclContext *Ctx) {
 }
 
 std::any ASTBuilder::visitParameter(AstraParser::ParameterContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::Parameter>();
+  auto *Result = Arena.allocate<ast::Parameter>();
   Result->Range = getRange(Ctx);
 
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
-  Result->Type = getType(Ctx->type());
+  Result->ParamType = getType(Ctx->type());
   if (Ctx->expression()) {
     Result->DefaultValue = getExpr(Ctx->expression());
   }
@@ -361,7 +361,7 @@ std::any ASTBuilder::visitParameter(AstraParser::ParameterContext *Ctx) {
 }
 
 std::any ASTBuilder::visitVariableDecl(AstraParser::VariableDeclContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::VarDecl>();
+  auto *Result = Arena.allocate<ast::VarDecl>();
   Result->Range = getRange(Ctx);
 
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
@@ -390,7 +390,7 @@ std::any ASTBuilder::visitType(AstraParser::TypeContext *Ctx) {
   if (const auto &Expressions = Ctx->expression(); !Expressions.empty()) {
     auto N = Expressions.size();
     for (size_t I = 0; I < N; ++I) {
-      auto *ArrayTy = ASTContext.allocate<ast::ArrayType>();
+      auto *ArrayTy = Arena.allocate<ast::ArrayType>();
 
       // The range covers the type plus the enclosing bracket pair.
       ArrayTy->Range = getRange(Ctx->getStart(), Ctx->RBRACKET(I)->getSymbol());
@@ -408,7 +408,7 @@ std::any ASTBuilder::visitParenType(AstraParser::ParenTypeContext *Ctx) {
 }
 
 std::any ASTBuilder::visitTypeRef(AstraParser::TypeRefContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::TypeRef>();
+  auto *Result = Arena.allocate<ast::TypeRef>();
   Result->Range = getRange(Ctx);
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
   if (auto *TypeArgs = Ctx->typeArguments()) {
@@ -424,7 +424,7 @@ std::any ASTBuilder::visitTypeRef(AstraParser::TypeRefContext *Ctx) {
 }
 
 std::any ASTBuilder::visitFunctionType(AstraParser::FunctionTypeContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::FunctionType>();
+  auto *Result = Arena.allocate<ast::FunctionType>();
   Result->Range = getRange(Ctx);
   Result->ReturnType = getType(Ctx->type());
   if (auto *ParamList = Ctx->paramTypeList()) {
@@ -437,7 +437,7 @@ std::any ASTBuilder::visitFunctionType(AstraParser::FunctionTypeContext *Ctx) {
 }
 
 std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::BuiltinType>();
+  auto *Result = Arena.allocate<ast::BuiltinType>();
   Result->Range = getRange(Ctx);
 
   auto BuiltinTy =
@@ -446,28 +446,28 @@ std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
           ->getType();
   switch (BuiltinTy) {
   case AstraParser::VOID:
-    Result->Type = ast::BuiltinType::Void;
+    Result->Value = ast::BuiltinType::Void;
     break;
   case AstraParser::BOOL:
-    Result->Type = ast::BuiltinType::Bool;
+    Result->Value = ast::BuiltinType::Bool;
     break;
   case AstraParser::INT:
-    Result->Type = ast::BuiltinType::Int;
+    Result->Value = ast::BuiltinType::Int;
     break;
   case AstraParser::LONG:
-    Result->Type = ast::BuiltinType::Long;
+    Result->Value = ast::BuiltinType::Long;
     break;
   case AstraParser::FLOAT:
-    Result->Type = ast::BuiltinType::Float;
+    Result->Value = ast::BuiltinType::Float;
     break;
   case AstraParser::DOUBLE:
-    Result->Type = ast::BuiltinType::Double;
+    Result->Value = ast::BuiltinType::Double;
     break;
   case AstraParser::CHAR:
-    Result->Type = ast::BuiltinType::Char;
+    Result->Value = ast::BuiltinType::Char;
     break;
   case AstraParser::STRING:
-    Result->Type = ast::BuiltinType::String;
+    Result->Value = ast::BuiltinType::String;
     break;
   default:
     // The token types above are the only builtin types the grammar allows.
@@ -477,7 +477,7 @@ std::any ASTBuilder::visitBuiltinType(AstraParser::BuiltinTypeContext *Ctx) {
 }
 
 std::any ASTBuilder::visitBlock(AstraParser::BlockContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::Block>();
+  auto *Result = Arena.allocate<ast::Block>();
   Result->Range = getRange(Ctx);
 
   const auto &Statements = Ctx->statement();
@@ -494,14 +494,14 @@ std::any ASTBuilder::visitStatement(AstraParser::StatementContext *Ctx) {
 
 std::any
 ASTBuilder::visitDeclStatement(AstraParser::DeclStatementContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::DeclStatement>();
+  auto *Result = Arena.allocate<ast::DeclStatement>();
   Result->Range = getRange(Ctx);
-  Result->Declaration = getDecl(Ctx->declaration());
+  Result->Decl = getDecl(Ctx->declaration());
   return static_cast<ast::Statement *>(Result);
 }
 
 std::any ASTBuilder::visitAssignment(AstraParser::AssignmentContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::AssignmentStmt>();
+  auto *Result = Arena.allocate<ast::AssignmentStmt>();
   Result->Range = getRange(Ctx);
   Result->LHS = getExpr(Ctx->postfixUnaryExpr());
   Result->RHS = getExpr(Ctx->expression());
@@ -567,7 +567,7 @@ ASTBuilder::visitControlStatement(AstraParser::ControlStatementContext *Ctx) {
 }
 
 std::any ASTBuilder::visitForStmt(AstraParser::ForStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::ForStmt>();
+  auto *Result = Arena.allocate<ast::ForStmt>();
   Result->Range = getRange(Ctx);
 
   if (auto *InitDecls = Ctx->variableDecls()) {
@@ -594,14 +594,14 @@ std::any ASTBuilder::visitForUpdate(AstraParser::ForUpdateContext *Ctx) {
   if (Ctx->assignment()) {
     return getStmt(Ctx->assignment());
   }
-  auto *Result = ASTContext.allocate<ast::ExprStmt>();
+  auto *Result = Arena.allocate<ast::ExprStmt>();
   Result->Range = getRange(Ctx);
   Result->Expression = getExpr(Ctx->expression());
   return static_cast<ast::Statement *>(Result);
 }
 
 std::any ASTBuilder::visitForEachStmt(AstraParser::ForEachStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::ForEachStmt>();
+  auto *Result = Arena.allocate<ast::ForEachStmt>();
   Result->Range = getRange(Ctx);
 
   Result->VarName = getText(Ctx->IDENTIFIER());
@@ -612,7 +612,7 @@ std::any ASTBuilder::visitForEachStmt(AstraParser::ForEachStmtContext *Ctx) {
 }
 
 std::any ASTBuilder::visitWhileStmt(AstraParser::WhileStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::WhileStmt>();
+  auto *Result = Arena.allocate<ast::WhileStmt>();
   Result->Range = getRange(Ctx);
 
   Result->Condition = getExpr(Ctx->expression());
@@ -622,7 +622,7 @@ std::any ASTBuilder::visitWhileStmt(AstraParser::WhileStmtContext *Ctx) {
 }
 
 std::any ASTBuilder::visitDoWhileStmt(AstraParser::DoWhileStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::DoWhileStmt>();
+  auto *Result = Arena.allocate<ast::DoWhileStmt>();
   Result->Range = getRange(Ctx);
 
   Result->Body = getBlock(Ctx->block());
@@ -632,7 +632,7 @@ std::any ASTBuilder::visitDoWhileStmt(AstraParser::DoWhileStmtContext *Ctx) {
 }
 
 std::any ASTBuilder::visitIfStmt(AstraParser::IfStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::IfStmt>();
+  auto *Result = Arena.allocate<ast::IfStmt>();
   Result->Range = getRange(Ctx);
 
   Result->Condition = getExpr(Ctx->expression());
@@ -651,7 +651,7 @@ std::any ASTBuilder::visitIfStmt(AstraParser::IfStmtContext *Ctx) {
 }
 
 std::any ASTBuilder::visitTryStatement(AstraParser::TryStatementContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::TryStmt>();
+  auto *Result = Arena.allocate<ast::TryStmt>();
   Result->Range = getRange(Ctx);
 
   Result->Body = getBlock(Ctx->block(0));
@@ -666,13 +666,13 @@ std::any ASTBuilder::visitTryStatement(AstraParser::TryStatementContext *Ctx) {
 }
 
 std::any ASTBuilder::visitCatchClause(AstraParser::CatchClauseContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::CatchClause>();
+  auto *Result = Arena.allocate<ast::CatchClause>();
   Result->Range = getRange(Ctx);
 
-  auto *Param = ASTContext.allocate<ast::Parameter>();
+  auto *Param = Arena.allocate<ast::Parameter>();
   Param->Range = getRange(Ctx);
   Param->Name = getIdentifier(Ctx->IDENTIFIER());
-  Param->Type = getType(Ctx->type());
+  Param->ParamType = getType(Ctx->type());
   // Catch parameters have no default value.
   Result->Param = Param;
 
@@ -681,7 +681,7 @@ std::any ASTBuilder::visitCatchClause(AstraParser::CatchClauseContext *Ctx) {
 }
 
 std::any ASTBuilder::visitExprStmt(AstraParser::ExprStmtContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::ExprStmt>();
+  auto *Result = Arena.allocate<ast::ExprStmt>();
   Result->Range = getRange(Ctx);
   Result->Expression = getExpr(Ctx->expression());
   return static_cast<ast::Statement *>(Result);
@@ -720,7 +720,7 @@ std::any ASTBuilder::visitComparison(AstraParser::ComparisonContext *Ctx) {
     Diags.report(getRange(Ctx->GT()->getSymbol(), Ctx->GT()->getSymbol()),
                  llvm::SourceMgr::DK_Error,
                  "expected '(' after type argument list");
-    auto *Result = ASTContext.allocate<ast::CallExpr>();
+    auto *Result = Arena.allocate<ast::CallExpr>();
     Result->Range = getRange(Ctx);
     Result->Callee = getExpr(Ctx->infixExpr(0));
     Result->ExplicitTypeArgs = true;
@@ -753,7 +753,7 @@ std::any ASTBuilder::visitComparison(AstraParser::ComparisonContext *Ctx) {
   // has the math semantics `a < b && b <= c` (each middle operand is
   // evaluated once). The expansion is left to semantic analysis. All
   // operators must point in the same direction.
-  auto *Result = ASTContext.allocate<ast::ComparisonChainExpr>();
+  auto *Result = Arena.allocate<ast::ComparisonChainExpr>();
   Result->Range = getRange(Ctx);
   bool Mixed = false;
   std::optional<bool> Ascending;
@@ -804,7 +804,7 @@ std::any ASTBuilder::visitInfixExpr(AstraParser::InfixExprContext *Ctx) {
   size_t InIdx = 0, IsIdx = 0;
   for (const auto &Op : Ops) {
     if (Op.IsIn) {
-      auto *Binary = ASTContext.allocate<ast::BinaryExpr>();
+      auto *Binary = Arena.allocate<ast::BinaryExpr>();
       Binary->Range = getRange(ElvisExprs.front()->getStart(),
                                ElvisExprs[++InIdx]->getStop());
       Binary->Operator = ast::Op::In;
@@ -812,7 +812,7 @@ std::any ASTBuilder::visitInfixExpr(AstraParser::InfixExprContext *Ctx) {
       Binary->RHS = getExpr(ElvisExprs[InIdx]);
       Result = Binary;
     } else /*Is expr*/ {
-      auto *Is = ASTContext.allocate<ast::IsExpr>();
+      auto *Is = Arena.allocate<ast::IsExpr>();
       Is->Range =
           getRange(ElvisExprs.front()->getStart(), Ctx->type(IsIdx)->getStop());
       Is->Operand = Result;
@@ -892,7 +892,7 @@ std::any ASTBuilder::visitAsExpr(AstraParser::AsExprContext *Ctx) {
   if (!Ctx->asOperator()) {
     return static_cast<ast::Expr *>(Operand);
   }
-  auto *Result = ASTContext.allocate<ast::AsExpr>();
+  auto *Result = Arena.allocate<ast::AsExpr>();
   Result->Range = getRange(Ctx);
   Result->Operand = Operand;
   Result->NullSafe = Ctx->asOperator()->QUEST() != nullptr;
@@ -911,7 +911,7 @@ ASTBuilder::visitPrefixUnaryExpr(AstraParser::PrefixUnaryExprContext *Ctx) {
                              (*It)->prefixUnaryOperator()->SUB(),
                              (*It)->prefixUnaryOperator()->NOT(),
                              (*It)->prefixUnaryOperator()->BIT_NOT());
-    auto *Unary = ASTContext.allocate<ast::UnaryExpr>();
+    auto *Unary = Arena.allocate<ast::UnaryExpr>();
     Unary->Range = getRange(OpToken, Ctx->postfixUnaryExpr()->getStop());
     Unary->Operator = getPrefixUnaryOp(OpToken->getType());
     Unary->Operand = Result;
@@ -927,7 +927,7 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
   // For example, `f(x).y` becomes `MemberExpr(CallExpr(f, x), y)`.
   for (auto *Postfix : Ctx->unaryPostfix()) {
     if (auto *Call = Postfix->callSuffix()) {
-      auto *CallExpr = ASTContext.allocate<ast::CallExpr>();
+      auto *CallExpr = Arena.allocate<ast::CallExpr>();
       CallExpr->Range = getRange(Ctx->getStart(), Postfix->getStop());
       CallExpr->Callee = Result;
       if (auto *TypeArgs = Call->typeArguments()) {
@@ -947,13 +947,13 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
       }
       Result = CallExpr;
     } else if (auto *Index = Postfix->indexingSuffix()) {
-      auto *IndexExpr = ASTContext.allocate<ast::IndexExpr>();
+      auto *IndexExpr = Arena.allocate<ast::IndexExpr>();
       IndexExpr->Range = getRange(Ctx->getStart(), Postfix->getStop());
       IndexExpr->Base = Result;
       IndexExpr->Index = getExpr(Index->expression());
       Result = IndexExpr;
     } else if (auto *Nav = Postfix->navigationSuffix()) {
-      auto *Member = ASTContext.allocate<ast::MemberExpr>();
+      auto *Member = Arena.allocate<ast::MemberExpr>();
       Member->Range = getRange(Ctx->getStart(), Postfix->getStop());
       Member->Base = Result;
       Member->Member = getText(Nav->IDENTIFIER());
@@ -966,9 +966,9 @@ ASTBuilder::visitPostfixUnaryExpr(AstraParser::PostfixUnaryExprContext *Ctx) {
 
 std::any ASTBuilder::visitPrimaryExpr(AstraParser::PrimaryExprContext *Ctx) {
   if (Ctx->IDENTIFIER()) {
-    auto *Result = ASTContext.allocate<ast::VarExpr>();
+    auto *Result = Arena.allocate<ast::VarExpr>();
     Result->Range = getRange(Ctx);
-    Result->Name = getText(Ctx->IDENTIFIER());
+    Result->Name = getIdentifier(Ctx->IDENTIFIER());
     return static_cast<ast::Expr *>(Result);
   }
   return visit(available(Ctx->parenExpr(), Ctx->literalConstant(),
@@ -984,18 +984,18 @@ std::any ASTBuilder::visitParenExpr(AstraParser::ParenExprContext *Ctx) {
 std::any
 ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
   if (Ctx->BOOLEAN_LITERAL()) {
-    auto *Result = ASTContext.allocate<ast::BoolLiteral>();
+    auto *Result = Arena.allocate<ast::BoolLiteral>();
     Result->Range = getRange(Ctx);
     Result->Value = getText(Ctx->BOOLEAN_LITERAL()) == "true";
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->NULL_LITERAL()) {
-    auto *Result = ASTContext.allocate<ast::NullLiteral>();
+    auto *Result = Arena.allocate<ast::NullLiteral>();
     Result->Range = getRange(Ctx);
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->INTEGER_LITERAL()) {
-    auto *Result = ASTContext.allocate<ast::IntLiteral>();
+    auto *Result = Arena.allocate<ast::IntLiteral>();
     Result->Range = getRange(Ctx);
     auto Text = getText(Ctx->INTEGER_LITERAL());
     unsigned Radix = 10;
@@ -1035,24 +1035,24 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->STRING_LITERAL()) {
-    auto *Result = ASTContext.allocate<ast::StringLiteral>();
+    auto *Result = Arena.allocate<ast::StringLiteral>();
     Result->Range = getRange(Ctx);
     // The token is closed (unterminated strings never reach the builder),
     // so stripping the quotes is safe.
     auto Body = getText(Ctx->STRING_LITERAL()).drop_front().drop_back();
     llvm::SmallVector<char, 16> Decoded;
     if (decodeStringBody(Body, Decoded, Diags, Result->Range)) {
-      Result->Value = ASTContext.allocateCopy(
-          llvm::StringRef(Decoded.data(), Decoded.size()));
+      Result->Value =
+          Arena.allocateCopy(llvm::StringRef(Decoded.data(), Decoded.size()));
     } else {
       // Keep the raw text so the node stays usable; the diagnostic was
       // already reported.
-      Result->Value = ASTContext.allocateCopy(Body);
+      Result->Value = Arena.allocateCopy(Body);
     }
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->CHAR_LITERAL()) {
-    auto *Result = ASTContext.allocate<ast::CharLiteral>();
+    auto *Result = Arena.allocate<ast::CharLiteral>();
     Result->Range = getRange(Ctx);
     auto Body = getText(Ctx->CHAR_LITERAL()).drop_front().drop_back();
     decodeCharValue(Body, Result->Value, Diags, Result->Range);
@@ -1060,7 +1060,7 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
   }
 
   // FLOAT_LITERAL or DOUBLE_LITERAL.
-  auto *Result = ASTContext.allocate<ast::FloatLiteral>();
+  auto *Result = Arena.allocate<ast::FloatLiteral>();
   Result->Range = getRange(Ctx);
   auto Text = getText(Ctx->FLOAT_LITERAL() ? Ctx->FLOAT_LITERAL()
                                            : Ctx->DOUBLE_LITERAL());
@@ -1087,7 +1087,7 @@ ASTBuilder::visitLiteralConstant(AstraParser::LiteralConstantContext *Ctx) {
 
 std::any
 ASTBuilder::visitCollectionLiteral(AstraParser::CollectionLiteralContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::CollectionExpr>();
+  auto *Result = Arena.allocate<ast::CollectionExpr>();
   Result->Range = getRange(Ctx);
   for (auto *Element : Ctx->expression()) {
     Result->Elements.push_back(getExpr(Element));
@@ -1096,13 +1096,13 @@ ASTBuilder::visitCollectionLiteral(AstraParser::CollectionLiteralContext *Ctx) {
 }
 
 std::any ASTBuilder::visitThisLiteral(AstraParser::ThisLiteralContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::ThisExpr>();
+  auto *Result = Arena.allocate<ast::ThisExpr>();
   Result->Range = getRange(Ctx);
   return static_cast<ast::Expr *>(Result);
 }
 
 std::any ASTBuilder::visitIfExpression(AstraParser::IfExpressionContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::IfExpr>();
+  auto *Result = Arena.allocate<ast::IfExpr>();
   Result->Range = getRange(Ctx);
 
   Result->Condition = getExpr(Ctx->expression(0));
@@ -1116,13 +1116,13 @@ std::any ASTBuilder::visitIfExpression(AstraParser::IfExpressionContext *Ctx) {
 std::any
 ASTBuilder::visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) {
   if (Ctx->THROW()) {
-    auto *Result = ASTContext.allocate<ast::ThrowExpr>();
+    auto *Result = Arena.allocate<ast::ThrowExpr>();
     Result->Range = getRange(Ctx);
     Result->Content = getExpr(Ctx->expression());
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->RETURN()) {
-    auto *Result = ASTContext.allocate<ast::ReturnExpr>();
+    auto *Result = Arena.allocate<ast::ReturnExpr>();
     Result->Range = getRange(Ctx);
     if (Ctx->expression()) {
       Result->Value = getExpr(Ctx->expression());
@@ -1130,7 +1130,7 @@ ASTBuilder::visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) {
     return static_cast<ast::Expr *>(Result);
   }
   if (Ctx->CONTINUE()) {
-    auto *Result = ASTContext.allocate<ast::ContinueExpr>();
+    auto *Result = Arena.allocate<ast::ContinueExpr>();
     Result->Range = getRange(Ctx);
     if (Ctx->label()) {
       Result->Pos = std::any_cast<ast::Label *>(visit(Ctx->label()));
@@ -1138,7 +1138,7 @@ ASTBuilder::visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) {
     return static_cast<ast::Expr *>(Result);
   }
   // The remaining alternative is BREAK.
-  auto *Result = ASTContext.allocate<ast::BreakExpr>();
+  auto *Result = Arena.allocate<ast::BreakExpr>();
   Result->Range = getRange(Ctx);
   if (Ctx->label()) {
     Result->Pos = std::any_cast<ast::Label *>(visit(Ctx->label()));
@@ -1147,7 +1147,7 @@ ASTBuilder::visitJumpExpression(AstraParser::JumpExpressionContext *Ctx) {
 }
 
 std::any ASTBuilder::visitLabel(AstraParser::LabelContext *Ctx) {
-  auto *Result = ASTContext.allocate<ast::Label>();
+  auto *Result = Arena.allocate<ast::Label>();
   Result->Range = getRange(Ctx);
   Result->Name = getIdentifier(Ctx->IDENTIFIER());
   return Result;

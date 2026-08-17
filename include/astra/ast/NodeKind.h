@@ -1,57 +1,14 @@
 #pragma once
 
 namespace astra::ast {
-/// The kind of every AST node.
-/// The order matters. The base classes `Expr`, `Statement`, `Declaration` and
+/// The kind of every AST node, generated from `AllNodes.def`.
+/// The order matters: the base classes `Expr`, `Statement`, `Declaration` and
 /// `Type` implement `classof` as a contiguous range test over `NodeKind`, so
-/// related kinds must stay grouped when new nodes are added.
+/// related kinds must stay grouped when new nodes are added — see the
+/// ordering notes at the top of `AllNodes.def`.
 enum class NodeKind {
-  Program,
-  TopLevelObject,
-  FunctionDecl,
-  ClassDecl,
-  VarDecl,
-  Parameter,
-  TypeRef,
-  BuiltinType,
-  ArrayType,
-  FunctionType,
-  Block,
-  DeclStatement,
-  ExprStmt,
-  AssignmentStmt,
-  IfStmt,
-  ForStmt,
-  ForEachStmt,
-  WhileStmt,
-  TryStmt,
-  DoWhileStmt,
-  NullLiteral,
-  BoolLiteral,
-  IntLiteral,
-  FloatLiteral,
-  StringLiteral,
-  CharLiteral,
-  VarExpr,
-  UnaryExpr,
-  BinaryExpr,
-  ComparisonChainExpr,
-  IfExpr,
-  ThrowExpr,
-  ReturnExpr,
-  ContinueExpr,
-  BreakExpr,
-  CallExpr,
-  IndexExpr,
-  MemberExpr,
-  IsExpr,
-  AsExpr,
-  ThisExpr,
-  CollectionExpr,
-  Label,
-  // `TypeParam` and `CatchClause` belong to no base-class range (`Expr`/
-  // `Statement`/`Declaration`/`Type`), so they live at the end of the enum.
-  TypeParam,
-  CatchClause,
+#define NODE(NAME, BASE, ...) NAME,
+#include "AllNodes.def"
+#undef NODE
 };
 } // namespace astra::ast

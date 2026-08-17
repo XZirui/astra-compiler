@@ -215,8 +215,7 @@ TEST_CASE("Dump visibility modifiers", "[dumper]") {
         dump(P, OS);
         CHECK(OS.str().find("VarDecl 'x' [public] [mutable]") !=
               llvm::StringRef::npos);
-        CHECK(OS.str().find("VarDecl 'y' [private]") !=
-              llvm::StringRef::npos);
+        CHECK(OS.str().find("VarDecl 'y' [private]") != llvm::StringRef::npos);
         CHECK(OS.str().find("FunctionDecl 'f' [protected]") !=
               llvm::StringRef::npos);
         CHECK(OS.str().find("ClassDecl 'Bar' [private]") !=

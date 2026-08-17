@@ -1,0 +1,67 @@
+// AllNodes.def -- the single list of AST node kinds.
+//
+// Include this file once per distinct `NODE` macro definition. It has no
+// include guard on purpose. Every consumer macro MUST be variadic:
+//
+//   #define NODE(NAME, BASE, ...) ...
+//   #include "AllNodes.def"
+//   #undef NODE
+//
+// The order matters: `NodeKind` is generated from this file and the base
+// classes `Expr`/`Statement`/`Declaration`/`Type` implement `classof` as a
+// contiguous range test over `NodeKind`, so related kinds must stay grouped:
+//   - statements:  Block .. DoWhileStmt
+//   - literals:    NullLiteral .. CharLiteral
+//   - expressions: VarExpr .. CollectionExpr
+//   - types:       TypeRef .. FunctionType
+// `TypeParam` and `CatchClause` belong to no range and must stay at the end.
+//
+// `BASE` is the direct C++ base class the node's visit method falls back to.
+// Note: `LiteralConstant` deliberately does not appear; literal kinds fall
+// back straight to `Expr`.
+
+NODE(Program, ASTNode)
+NODE(TopLevelObject, ASTNode)
+NODE(FunctionDecl, Declaration)
+NODE(ClassDecl, Declaration)
+NODE(VarDecl, Declaration)
+NODE(Parameter, ASTNode)
+NODE(TypeRef, Type)
+NODE(BuiltinType, Type)
+NODE(ArrayType, Type)
+NODE(FunctionType, Type)
+NODE(Block, Statement)
+NODE(DeclStatement, Statement)
+NODE(ExprStmt, Statement)
+NODE(AssignmentStmt, Statement)
+NODE(IfStmt, Statement)
+NODE(ForStmt, Statement)
+NODE(ForEachStmt, Statement)
+NODE(WhileStmt, Statement)
+NODE(TryStmt, Statement)
+NODE(DoWhileStmt, Statement)
+NODE(NullLiteral, Expr)
+NODE(BoolLiteral, Expr)
+NODE(IntLiteral, Expr)
+NODE(FloatLiteral, Expr)
+NODE(StringLiteral, Expr)
+NODE(CharLiteral, Expr)
+NODE(VarExpr, Expr)
+NODE(UnaryExpr, Expr)
+NODE(BinaryExpr, Expr)
+NODE(ComparisonChainExpr, Expr)
+NODE(IfExpr, Expr)
+NODE(ThrowExpr, Expr)
+NODE(ReturnExpr, Expr)
+NODE(ContinueExpr, Expr)
+NODE(BreakExpr, Expr)
+NODE(CallExpr, Expr)
+NODE(IndexExpr, Expr)
+NODE(MemberExpr, Expr)
+NODE(IsExpr, Expr)
+NODE(AsExpr, Expr)
+NODE(ThisExpr, Expr)
+NODE(CollectionExpr, Expr)
+NODE(Label, ASTNode)
+NODE(TypeParam, ASTNode)
+NODE(CatchClause, ASTNode)

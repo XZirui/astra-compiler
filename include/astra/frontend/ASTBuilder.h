@@ -18,9 +18,9 @@ namespace astra::frontend {
 /// while the builder runs.
 class ASTBuilder : public AstraParserBaseVisitor {
   /// The arena that owns every node this builder creates.
-  ast::ASTContext &ASTContext;
+  ast::ASTContext &Arena;
   /// The source manager whose buffer the AST ranges point into.
-  llvm::SourceMgr &SourceMgr;
+  llvm::SourceMgr &SrcMgr;
   /// The `FileID` of the buffer currently being parsed.
   unsigned CurrentFile;
   /// Collects diagnostics for errors the builder detects (e.g. unimplemented
@@ -28,10 +28,10 @@ class ASTBuilder : public AstraParserBaseVisitor {
   basic::DiagnosticsEngine &Diags;
 
 public:
-  ASTBuilder(ast::ASTContext &ASTContext, unsigned FileID,
+  ASTBuilder(ast::ASTContext &Ctx, unsigned FileID,
              basic::DiagnosticsEngine &Diags)
-      : ASTContext(ASTContext), SourceMgr(ASTContext.getSourceMgr()),
-        CurrentFile(FileID), Diags(Diags) {}
+      : Arena(Ctx), SrcMgr(Arena.getSourceMgr()), CurrentFile(FileID),
+        Diags(Diags) {}
 
   /// Visit the file parse tree and return the resulting `Program`.
   ast::Program *build(AstraParser::FileContext *Ctx) {
@@ -41,16 +41,15 @@ public:
 protected:
   /// Get the `llvm::SMLoc` that points at the first character of `Token`.
   /// Note: `Token` must not be nullptr.
-  llvm::SMLoc getLoc(antlr4::Token *Token) {
-    auto Offset = Token->getStartIndex();
-    auto *BufferStart =
-        SourceMgr.getMemoryBuffer(CurrentFile)->getBufferStart();
+  llvm::SMLoc getLoc(antlr4::Token *Tok) {
+    auto Offset = Tok->getStartIndex();
+    auto *BufferStart = SrcMgr.getMemoryBuffer(CurrentFile)->getBufferStart();
     return llvm::SMLoc::getFromPointer(BufferStart + Offset);
   }
 
   /// Return a SMRange that points to [Start, Stop + 1).
   llvm::SMRange getRange(antlr4::Token *Start, antlr4::Token *Stop) {
-    auto *MB = SourceMgr.getMemoryBuffer(CurrentFile);
+    auto *MB = SrcMgr.getMemoryBuffer(CurrentFile);
     size_t Size = MB->getBufferSize();
     // The EOF token reports a stop index one past the last byte (`SIZE_MAX`
     // for an empty buffer); clamp it so `+1` never wraps past the buffer.
@@ -68,7 +67,7 @@ protected:
 
   /// Return a `StringRef` over [StartIndex, StopIndex], both ends inclusive.
   llvm::StringRef getText(size_t StartIndex, size_t StopIndex) {
-    const auto *MB = SourceMgr.getMemoryBuffer(CurrentFile);
+    const auto *MB = SrcMgr.getMemoryBuffer(CurrentFile);
     size_t Size = MB->getBufferSize();
     // The EOF token reports a stop index one past the last byte (`SIZE_MAX`
     // for an empty buffer); clamp it so the length never goes out of bounds.
@@ -108,7 +107,7 @@ protected:
                            const std::vector<OpCtx *> &Ops, OpFn &&GetOp) {
     auto *Result = getExpr(Subs.front());
     for (size_t I = 1; I < Subs.size(); ++I) {
-      auto *Binary = ASTContext.allocate<ast::BinaryExpr>();
+      auto *Binary = Arena.allocate<ast::BinaryExpr>();
       Binary->Range = getRange(Subs.front()->getStart(), Subs[I]->getStop());
       Binary->Operator = GetOp(Ops[I - 1]);
       Binary->LHS = Result;
@@ -121,7 +120,7 @@ protected:
   /// Intern the text of `Node` as an `IdentifierInfo` in the `ASTContext`.
   ast::IdentifierInfo *getIdentifier(antlr4::tree::TerminalNode *Node) {
     auto Text = getText(Node);
-    return ASTContext.getIdentifier(Text);
+    return Arena.getIdentifier(Text);
   }
 
   ast::Declaration *getDecl(antlr4::tree::ParseTree *Tree);

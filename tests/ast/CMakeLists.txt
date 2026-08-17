@@ -1,5 +1,6 @@
 add_executable(astra-ast-tests
         DumperTest.cpp
+        VisitorTest.cpp
 )
 
 target_link_libraries(astra-ast-tests

@@ -3,6 +3,10 @@
 #include "Statement.h"
 #include "Type.h"
 
+namespace astra::sema {
+struct Scope;
+} // namespace astra::sema
+
 namespace astra::ast {
 /// The visibility of a declaration. Declarations without a modifier default
 /// to `Public`. For class members this controls visibility outside the
@@ -20,7 +24,7 @@ struct Declaration : ASTNode {
 
 struct Parameter : ASTNode {
   IdentifierInfo *Name = nullptr;
-  Type *Type = nullptr;
+  Type *ParamType = nullptr;
   /// The optional default value of the parameter.
   Expr *DefaultValue = nullptr;
 
@@ -60,6 +64,11 @@ struct TypeParam : ASTNode {
   IdentifierInfo *Name = nullptr;
   /// The default type written after `=`. Null when no default is given.
   Type *DefaultType = nullptr;
+  /// The canonical type of this parameter resolved by semantic analysis;
+  /// `nullptr` before analysis runs. Always a `astra::sema::TypeParamType`:
+  /// every reference to this parameter shares the same instance (identity is
+  /// part of the type model). Allocated in the `ASTContext` arena.
+  sema::Type *ResolvedType = nullptr;
   TypeParam() { Kind = NodeKind::TypeParam; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::TypeParam;
@@ -75,6 +84,9 @@ struct ClassDecl : Declaration {
   /// functions and nested `ClassDecl`s) in source order. Empty when no body
   /// is written.
   llvm::SmallVector<Declaration *, 4> Members;
+  /// The class scope created by semantic analysis; `nullptr` before analysis
+  /// runs. The scope is allocated in the `ASTContext` arena.
+  sema::Scope *ClassScope = nullptr;
   ClassDecl() { Kind = NodeKind::ClassDecl; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::ClassDecl;

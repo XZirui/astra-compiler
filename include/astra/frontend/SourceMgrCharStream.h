@@ -15,7 +15,7 @@ namespace astra::frontend {
 /// The whole buffer is held in memory, so `consume` and `seek` only move an
 /// index into it. The underlying buffer must outlive the lexer.
 class SourceMgrCharStream : public antlr4::CharStream {
-  const llvm::SourceMgr &SourceMgr;
+  const llvm::SourceMgr &SrcMgr;
   /// The file content. Points into the buffer owned by `SourceMgr`.
   llvm::StringRef Buffer;
   /// The current read position inside `Buffer`.
@@ -25,8 +25,8 @@ class SourceMgrCharStream : public antlr4::CharStream {
 
 public:
   SourceMgrCharStream(const llvm::SourceMgr &SrcMgr, unsigned FileID)
-      : SourceMgr(SrcMgr), FileID(FileID) {
-    const auto *MB = SourceMgr.getMemoryBuffer(FileID);
+      : SrcMgr(SrcMgr), FileID(FileID) {
+    const auto *MB = SrcMgr.getMemoryBuffer(FileID);
     if (MB) {
       Buffer = MB->getBuffer();
     } else {
@@ -54,7 +54,7 @@ public:
       // IntStream::EOF, not macro `EOF`
       return EOF;
     }
-    return static_cast<unsigned char>(Buffer[Pos]);
+    return static_cast<unsigned char>(Buffer[static_cast<size_t>(Pos)]);
   }
 
   virtual size_t index() override { return CurrentIndex; }
@@ -67,13 +67,13 @@ public:
 
   /// mark/release do nothing. The whole buffer is already in memory, so
   /// there is no state to save or restore.
-  virtual ssize_t mark() override { return CurrentIndex; }
+  virtual ssize_t mark() override { return static_cast<ssize_t>(CurrentIndex); }
   virtual void release(ssize_t /* marker */) override {}
 
-  virtual std::string getText(const antlr4::misc::Interval &Interval) override {
+  virtual std::string getText(const antlr4::misc::Interval &Intv) override {
     // Clamp the requested interval to the buffer bounds.
-    auto Start = static_cast<size_t>(Interval.a);
-    auto Length = static_cast<size_t>(Interval.b - Interval.a + 1);
+    auto Start = static_cast<size_t>(Intv.a);
+    auto Length = static_cast<size_t>(Intv.b - Intv.a + 1);
     if (Start >= Buffer.size()) {
       return "";
     }
@@ -87,8 +87,7 @@ public:
   virtual std::string toString() const override { return Buffer.str(); }
 
   virtual std::string getSourceName() const override {
-    auto FileName =
-        SourceMgr.getMemoryBuffer(FileID)->getBufferIdentifier().str();
+    auto FileName = SrcMgr.getMemoryBuffer(FileID)->getBufferIdentifier().str();
     if (FileName.empty()) {
       return "<input>";
     }

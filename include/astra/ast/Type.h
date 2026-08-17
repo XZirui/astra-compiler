@@ -7,8 +7,15 @@
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/SmallVector.h>
 
+namespace astra::sema {
+struct Type;
+} // namespace astra::sema
+
 namespace astra::ast {
 struct Type : ASTNode {
+  /// The canonical type resolved by semantic analysis; `nullptr` before
+  /// analysis runs. On resolution failure this is an `astra::sema::ErrorType`.
+  sema::Type *ResolvedType = nullptr;
   static bool classof(const ASTNode *Node) {
     auto K = Node->getKind();
     return (K <= NodeKind::FunctionType) && (K >= NodeKind::TypeRef);
@@ -29,7 +36,7 @@ struct TypeRef : Type {
 };
 
 struct BuiltinType : Type {
-  enum Ty { Void, Bool, Int, Long, Float, Double, Char, String } Type = Void;
+  enum Ty { Void, Bool, Int, Long, Float, Double, Char, String } Value = Void;
   BuiltinType() { Kind = NodeKind::BuiltinType; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::BuiltinType;

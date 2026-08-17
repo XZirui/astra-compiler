@@ -23,7 +23,7 @@ struct Block : Statement {
 };
 
 struct DeclStatement : Statement {
-  Declaration *Declaration = nullptr;
+  Declaration *Decl = nullptr;
   DeclStatement() { Kind = NodeKind::DeclStatement; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::DeclStatement;
