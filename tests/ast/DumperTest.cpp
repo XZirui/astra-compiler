@@ -17,7 +17,7 @@ TEST_CASE("Dump a simple function", "[dumper]") {
     CHECK(OS.str() == R"(Program
 `- TopLevelObject
   `- Decl
-    `- FunctionDecl 'main'
+    `- FunctionDecl 'main' [public]
       |- ReturnType
       | `- BuiltinType 'Void'
       `- Body
@@ -38,14 +38,14 @@ TEST_CASE("Dump declarations, statements and operators", "[dumper]") {
                       CHECK(OS.str() == R"(Program
 `- TopLevelObject
   `- Decl
-    `- FunctionDecl 'main'
+    `- FunctionDecl 'main' [public]
       |- ReturnType
       | `- BuiltinType 'Void'
       `- Body
         `- Block
           |- DeclStatement
           | `- Declaration
-          |   `- VarDecl 'x' [mutable]
+          |   `- VarDecl 'x' [public] [mutable]
           |     |- VarType
           |     | `- BuiltinType 'Int'
           |     `- Value
@@ -71,7 +71,7 @@ TEST_CASE("Dump calls with type arguments", "[dumper]") {
     CHECK(OS.str() == R"(Program
 `- TopLevelObject
   `- Decl
-    `- VarDecl 'r' [mutable]
+    `- VarDecl 'r' [public] [mutable]
       `- Value
         `- CallExpr '<>'
           |- Callee
@@ -173,6 +173,57 @@ TEST_CASE("Dump comparison chains", "[dumper]") {
   });
 }
 
+TEST_CASE("Dump a class declaration", "[dumper]") {
+  test::parseSource("class Box<T = int> { var v = 0; fun f() -> void {} }",
+                    [](ASTContext &, Program *P) {
+                      llvm::SmallString<256> Buf;
+                      llvm::raw_svector_ostream OS(Buf);
+                      dump(P, OS);
+                      CHECK(OS.str() == R"(Program
+`- TopLevelObject
+  `- Decl
+    `- ClassDecl 'Box' [public]
+      |- TypeParam 'T'
+      | `- DefaultType
+      |   `- BuiltinType 'Int'
+      |- VarDecl 'v' [public] [mutable]
+      | `- Value
+      |   `- IntLiteral '0'
+      `- FunctionDecl 'f' [public]
+        |- ReturnType
+        | `- BuiltinType 'Void'
+        `- Body
+          `- Block
+)");
+                    });
+
+  test::parseSource("class Point {}", [](ASTContext &, Program *P) {
+    llvm::SmallString<128> Buf;
+    llvm::raw_svector_ostream OS(Buf);
+    dump(P, OS);
+    CHECK(OS.str().find("ClassDecl 'Point'") != llvm::StringRef::npos);
+  });
+}
+
+TEST_CASE("Dump visibility modifiers", "[dumper]") {
+  test::parseSource(
+      "class Foo { public var x: int; private val y = 1; protected fun f() -> "
+      "void {} } private class Bar {}",
+      [](ASTContext &, Program *P) {
+        llvm::SmallString<256> Buf;
+        llvm::raw_svector_ostream OS(Buf);
+        dump(P, OS);
+        CHECK(OS.str().find("VarDecl 'x' [public] [mutable]") !=
+              llvm::StringRef::npos);
+        CHECK(OS.str().find("VarDecl 'y' [private]") !=
+              llvm::StringRef::npos);
+        CHECK(OS.str().find("FunctionDecl 'f' [protected]") !=
+              llvm::StringRef::npos);
+        CHECK(OS.str().find("ClassDecl 'Bar' [private]") !=
+              llvm::StringRef::npos);
+      });
+}
+
 TEST_CASE("Dump nullsafe member access and elvis", "[dumper]") {
   test::parseSource("var r = a?.b ?: c;", [](ASTContext &, Program *P) {
     llvm::SmallString<128> Buf;
@@ -181,7 +232,7 @@ TEST_CASE("Dump nullsafe member access and elvis", "[dumper]") {
     CHECK(OS.str() == R"(Program
 `- TopLevelObject
   `- Decl
-    `- VarDecl 'r' [mutable]
+    `- VarDecl 'r' [public] [mutable]
       `- Value
         `- BinaryExpr '?:'
           |- LHS

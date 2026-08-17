@@ -1,6 +1,7 @@
 add_executable(astra-frontend-tests
         TypesTest.cpp
         DeclarationsTest.cpp
+        ClassesTest.cpp
         StatementsTest.cpp
         ExpressionsTest.cpp
 )

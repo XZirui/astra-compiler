@@ -4,8 +4,7 @@
 
 namespace astra::ast {
 struct TopLevelObject : ASTNode {
-  /// The wrapped top-level declaration. Future top-level kinds, such as
-  /// class declarations, will be added to this node.
+  /// The wrapped top-level declaration (function, variable or class).
   Declaration *Decl = nullptr;
   TopLevelObject() { Kind = NodeKind::TopLevelObject; }
   static bool classof(const ASTNode *Node) {

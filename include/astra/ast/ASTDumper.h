@@ -8,6 +8,7 @@
 
 namespace astra::ast {
 struct Program;
+enum class Visibility;
 
 /// Dumps an `ast::Program` to a `llvm::raw_ostream` as a clang AST-dump
 /// style tree. Each node is printed as `KindName 'attribute'` (e.g.
@@ -41,6 +42,8 @@ class ASTDumper {
   static llvm::StringRef getOpSymbol(Op Operator);
   /// Return the spelling of a builtin type kind as printed in the dump.
   static llvm::StringRef getBuiltinTypeName(BuiltinType::Ty Type);
+  /// Return the spelling of a visibility as printed in the dump.
+  static llvm::StringRef getVisibilityName(Visibility Vis);
 
   /// Print the node's header line, e.g. `BinaryExpr '+'`.
   void dumpHeader(const ASTNode *Node);

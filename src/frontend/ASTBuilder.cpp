@@ -34,6 +34,24 @@ static antlr4::Token *getToken(antlr4::tree::TerminalNode *First,
       ->getSymbol();
 }
 
+/// Map a visibility modifier token to the corresponding `ast::Visibility`.
+static ast::Visibility
+getVisibility(AstraParser::VisibilityModifierContext *Mod) {
+  switch (
+      getToken(Mod->PUBLIC(), Mod->PRIVATE(), Mod->PROTECTED())->getType()) {
+  case AstraParser::PUBLIC:
+    return ast::Visibility::Public;
+  case AstraParser::PRIVATE:
+    return ast::Visibility::Private;
+  case AstraParser::PROTECTED:
+    return ast::Visibility::Protected;
+  default:
+    // The token types above are the only visibility modifiers the grammar
+    // allows.
+    llvm_unreachable("Unknown visibility modifier.");
+  }
+}
+
 /// Map a binary operator token to the corresponding `ast::Op`.
 static ast::Op getBinaryOp(int TokenType) {
   switch (TokenType) {
@@ -277,7 +295,13 @@ ASTBuilder::visitTopLevelObject(AstraParser::TopLevelObjectContext *Ctx) {
 }
 
 std::any ASTBuilder::visitDeclaration(AstraParser::DeclarationContext *Ctx) {
-  return visit(available(Ctx->functionDecl(), Ctx->variableDecl()));
+  auto *Decl = getDecl(
+      available(Ctx->functionDecl(), Ctx->variableDecl(), Ctx->classDecl()));
+  if (auto *Mod = Ctx->visibilityModifier()) {
+    Decl->Vis = getVisibility(Mod);
+  }
+  // No modifier keeps the default `Public`.
+  return static_cast<ast::Declaration *>(Decl);
 }
 
 std::any ASTBuilder::visitFunctionDecl(AstraParser::FunctionDeclContext *Ctx) {
@@ -293,6 +317,33 @@ std::any ASTBuilder::visitFunctionDecl(AstraParser::FunctionDeclContext *Ctx) {
     Result->Parameters.push_back(std::any_cast<ast::Parameter *>(visit(Param)));
   }
 
+  return static_cast<ast::Declaration *>(Result);
+}
+
+std::any ASTBuilder::visitClassDecl(AstraParser::ClassDeclContext *Ctx) {
+  auto *Result = ASTContext.allocate<ast::ClassDecl>();
+  Result->Range = getRange(Ctx);
+
+  Result->Name = getIdentifier(Ctx->IDENTIFIER());
+  if (auto *TypeParams = Ctx->typeParameters()) {
+    for (auto *Param : TypeParams->typeParameter()) {
+      auto *TypeParam = ASTContext.allocate<ast::TypeParam>();
+      TypeParam->Range = getRange(Param);
+      TypeParam->Name = getIdentifier(Param->IDENTIFIER());
+      if (auto *DefaultType = Param->type()) {
+        TypeParam->DefaultType = getType(DefaultType);
+      }
+      Result->TypeParams.push_back(TypeParam);
+    }
+  }
+  if (auto *Body = Ctx->classBody()) {
+    for (auto *Member : Body->declaration()) {
+      Result->Members.push_back(getDecl(Member));
+    }
+  }
+
+  // std::any requires the exact type: ClassDecl* would not match
+  // any_cast<Declaration*>.
   return static_cast<ast::Declaration *>(Result);
 }
 

@@ -16,14 +16,24 @@ topLevelObject
     : declaration
     ;
 
-// TODO class decl
 declaration
-    : functionDecl
-    | variableDecl SEMICOLON
+    : visibilityModifier? (functionDecl | variableDecl SEMICOLON | classDecl)
+    ;
+
+visibilityModifier
+    : PUBLIC | PRIVATE | PROTECTED
     ;
 
 functionDecl
     : FUN IDENTIFIER LPAREN (parameter (COMMA parameter)*)? RPAREN ARROW type block
+    ;
+
+classDecl
+    : CLASS IDENTIFIER typeParameters? classBody?
+    ;
+
+classBody
+    : LBRACE declaration* RBRACE
     ;
 
 parameter
@@ -52,14 +62,25 @@ paramTypeList
     ;
 
 // TODO value for template
-// TODO: default type parameters (e.g. `T = Int`); an empty type argument
-// list `<>` is accepted so it can request the defaults.
+// An empty type argument list `<>` is accepted so it can request the default
+// type parameters.
 typeArguments
     : LT typeArgument? GT
     ;
 
 typeArgument
     : type (COMMA type)*
+    ;
+
+// Type parameter declaration lists (`class Box<T, U = Int>`) declare names
+// with optional default types, unlike `typeArguments` which reference
+// existing types (`Box<int>`). Value parameters are future work.
+typeParameters
+    : LT typeParameter (COMMA typeParameter)* GT
+    ;
+
+typeParameter
+    : IDENTIFIER (ASSIGNMENT type)?
     ;
 
 builtinType

@@ -93,6 +93,18 @@ llvm::StringRef ASTDumper::getBuiltinTypeName(BuiltinType::Ty Type) {
   llvm_unreachable("Unknown BuiltinType.");
 }
 
+llvm::StringRef ASTDumper::getVisibilityName(Visibility Vis) {
+  switch (Vis) {
+  case Visibility::Public:
+    return "public";
+  case Visibility::Private:
+    return "private";
+  case Visibility::Protected:
+    return "protected";
+  }
+  llvm_unreachable("Unknown Visibility.");
+}
+
 void ASTDumper::dumpHeader(const ASTNode *Node) {
   switch (Node->getKind()) {
   case NodeKind::Program:
@@ -103,12 +115,20 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     break;
   case NodeKind::FunctionDecl: {
     auto *Fn = static_cast<const FunctionDecl *>(Node);
-    OS << "FunctionDecl '" << Fn->Name->getName() << "'";
+    OS << "FunctionDecl '" << Fn->Name->getName() << "' ["
+       << getVisibilityName(Fn->Vis) << "]";
+    break;
+  }
+  case NodeKind::ClassDecl: {
+    auto *Cls = static_cast<const ClassDecl *>(Node);
+    OS << "ClassDecl '" << Cls->Name->getName() << "' ["
+       << getVisibilityName(Cls->Vis) << "]";
     break;
   }
   case NodeKind::VarDecl: {
     auto *Var = static_cast<const VarDecl *>(Node);
-    OS << "VarDecl '" << Var->Name->getName() << "'";
+    OS << "VarDecl '" << Var->Name->getName() << "' ["
+       << getVisibilityName(Var->Vis) << "]";
     if (Var->IsMutable) {
       OS << " [mutable]";
     }
@@ -329,6 +349,11 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "Label '" << Lbl->Name->getName() << "'";
     break;
   }
+  case NodeKind::TypeParam: {
+    auto *Param = static_cast<const TypeParam *>(Node);
+    OS << "TypeParam '" << Param->Name->getName() << "'";
+    break;
+  }
   default:
     llvm_unreachable("Unknown AST node kind.");
   }
@@ -351,6 +376,12 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     appendChildren(Children, Fn->Parameters);
     pushChild(Children, "ReturnType", Fn->ReturnType);
     pushChild(Children, "Body", Fn->Body);
+    break;
+  }
+  case NodeKind::ClassDecl: {
+    auto *Cls = static_cast<const ClassDecl *>(Node);
+    appendChildren(Children, Cls->TypeParams);
+    appendChildren(Children, Cls->Members);
     break;
   }
   case NodeKind::VarDecl: {
@@ -503,6 +534,11 @@ void ASTDumper::collectChildren(const ASTNode *Node,
   case NodeKind::TypeRef: {
     auto *Ref = static_cast<const TypeRef *>(Node);
     appendChildren(Children, Ref->TypeArgs);
+    break;
+  }
+  case NodeKind::TypeParam: {
+    auto *Param = static_cast<const TypeParam *>(Node);
+    pushChild(Children, "DefaultType", Param->DefaultType);
     break;
   }
   // Leaves without children.

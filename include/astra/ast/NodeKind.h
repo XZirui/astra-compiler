@@ -9,6 +9,7 @@ enum class NodeKind {
   Program,
   TopLevelObject,
   FunctionDecl,
+  ClassDecl,
   VarDecl,
   Parameter,
   TypeRef,
@@ -47,5 +48,8 @@ enum class NodeKind {
   ThisExpr,
   CollectionExpr,
   Label,
+  // `TypeParam` belongs to no base-class range (`Expr`/`Statement`/
+  // `Declaration`/`Type`), so it lives at the end of the enum.
+  TypeParam,
 };
 } // namespace astra::ast

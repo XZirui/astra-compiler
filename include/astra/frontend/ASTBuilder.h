@@ -139,6 +139,7 @@ public:
 
   std::any visitDeclaration(AstraParser::DeclarationContext *Ctx) override;
   std::any visitFunctionDecl(AstraParser::FunctionDeclContext *Ctx) override;
+  std::any visitClassDecl(AstraParser::ClassDeclContext *Ctx) override;
   std::any visitParameter(AstraParser::ParameterContext *Ctx) override;
   std::any visitVariableDecl(AstraParser::VariableDeclContext *Ctx) override;
 
