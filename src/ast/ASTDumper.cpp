@@ -190,6 +190,9 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
   case NodeKind::DoWhileStmt:
     OS << "DoWhileStmt";
     break;
+  case NodeKind::TryStmt:
+    OS << "TryStmt";
+    break;
   case NodeKind::NullLiteral:
     OS << "NullLiteral";
     break;
@@ -354,6 +357,11 @@ void ASTDumper::dumpHeader(const ASTNode *Node) {
     OS << "TypeParam '" << Param->Name->getName() << "'";
     break;
   }
+  case NodeKind::CatchClause: {
+    auto *Clause = static_cast<const CatchClause *>(Node);
+    OS << "CatchClause '" << Clause->Param->Name->getName() << "'";
+    break;
+  }
   default:
     llvm_unreachable("Unknown AST node kind.");
   }
@@ -462,6 +470,13 @@ void ASTDumper::collectChildren(const ASTNode *Node,
     pushChild(Children, "Condition", Stmt->Condition);
     break;
   }
+  case NodeKind::TryStmt: {
+    auto *Stmt = static_cast<const TryStmt *>(Node);
+    pushChild(Children, "Body", Stmt->Body);
+    appendChildren(Children, Stmt->CatchClauses);
+    pushChild(Children, "Finally", Stmt->Finally);
+    break;
+  }
   case NodeKind::IfExpr: {
     auto *E = static_cast<const IfExpr *>(Node);
     pushChild(Children, "Condition", E->Condition);
@@ -539,6 +554,12 @@ void ASTDumper::collectChildren(const ASTNode *Node,
   case NodeKind::TypeParam: {
     auto *Param = static_cast<const TypeParam *>(Node);
     pushChild(Children, "DefaultType", Param->DefaultType);
+    break;
+  }
+  case NodeKind::CatchClause: {
+    auto *Clause = static_cast<const CatchClause *>(Node);
+    pushChild(Children, "Param", Clause->Param);
+    pushChild(Children, "Body", Clause->Body);
     break;
   }
   // Leaves without children.

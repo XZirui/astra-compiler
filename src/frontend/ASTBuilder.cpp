@@ -562,7 +562,8 @@ std::any ASTBuilder::visitAssignment(AstraParser::AssignmentContext *Ctx) {
 std::any
 ASTBuilder::visitControlStatement(AstraParser::ControlStatementContext *Ctx) {
   return visit(available(Ctx->forStmt(), Ctx->forEachStmt(), Ctx->whileStmt(),
-                         Ctx->doWhileStmt(), Ctx->ifStmt()));
+                         Ctx->doWhileStmt(), Ctx->ifStmt(),
+                         Ctx->tryStatement()));
 }
 
 std::any ASTBuilder::visitForStmt(AstraParser::ForStmtContext *Ctx) {
@@ -647,6 +648,36 @@ std::any ASTBuilder::visitIfStmt(AstraParser::IfStmtContext *Ctx) {
   }
 
   return static_cast<ast::Statement *>(Result);
+}
+
+std::any ASTBuilder::visitTryStatement(AstraParser::TryStatementContext *Ctx) {
+  auto *Result = ASTContext.allocate<ast::TryStmt>();
+  Result->Range = getRange(Ctx);
+
+  Result->Body = getBlock(Ctx->block(0));
+  for (auto *Clause : Ctx->catchClause()) {
+    Result->CatchClauses.push_back(
+        std::any_cast<ast::CatchClause *>(visit(Clause)));
+  }
+  if (Ctx->FINALLY()) {
+    Result->Finally = getBlock(Ctx->block().back());
+  }
+  return static_cast<ast::Statement *>(Result);
+}
+
+std::any ASTBuilder::visitCatchClause(AstraParser::CatchClauseContext *Ctx) {
+  auto *Result = ASTContext.allocate<ast::CatchClause>();
+  Result->Range = getRange(Ctx);
+
+  auto *Param = ASTContext.allocate<ast::Parameter>();
+  Param->Range = getRange(Ctx);
+  Param->Name = getIdentifier(Ctx->IDENTIFIER());
+  Param->Type = getType(Ctx->type());
+  // Catch parameters have no default value.
+  Result->Param = Param;
+
+  Result->Body = getBlock(Ctx->block());
+  return Result;
 }
 
 std::any ASTBuilder::visitExprStmt(AstraParser::ExprStmtContext *Ctx) {

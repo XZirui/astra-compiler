@@ -4,6 +4,7 @@
 
 namespace astra::ast {
 struct Declaration;
+struct Parameter;
 
 struct Statement : ASTNode {
   static bool classof(const ASTNode *Node) {
@@ -91,6 +92,29 @@ struct WhileStmt : Statement {
   WhileStmt() { Kind = NodeKind::WhileStmt; }
   static bool classof(const ASTNode *Node) {
     return Node->getKind() == NodeKind::WhileStmt;
+  }
+};
+
+/// One `catch` clause of a `TryStmt`. The parameter names the caught
+/// exception; it has no default value.
+struct CatchClause : ASTNode {
+  Parameter *Param = nullptr;
+  Block *Body = nullptr;
+  CatchClause() { Kind = NodeKind::CatchClause; }
+  static bool classof(const ASTNode *Node) {
+    return Node->getKind() == NodeKind::CatchClause;
+  }
+};
+
+/// A `try` statement. The grammar requires at least one catch clause or a
+/// `finally` block, so `CatchClauses` and `Finally` are never both empty.
+struct TryStmt : Statement {
+  Block *Body = nullptr;
+  llvm::SmallVector<CatchClause *> CatchClauses;
+  Block *Finally = nullptr;
+  TryStmt() { Kind = NodeKind::TryStmt; }
+  static bool classof(const ASTNode *Node) {
+    return Node->getKind() == NodeKind::TryStmt;
   }
 };
 

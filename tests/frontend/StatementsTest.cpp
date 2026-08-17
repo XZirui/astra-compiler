@@ -149,3 +149,67 @@ TEST_CASE("Statement order is preserved", "[statements]") {
         REQUIRE(static_cast<VarExpr *>(SecondCall->Callee)->Name == "b");
       });
 }
+
+TEST_CASE("Try statement", "[statements]") {
+  test::parseSource(
+      "fun f() -> void { try { x(); } catch (e: Exception) { y(); } finally { "
+      "z(); } }",
+      [](ASTContext &Ctx, Program *P) {
+        auto *Try = static_cast<TryStmt *>(firstStmt(P));
+        REQUIRE(Try->Body->getKind() == NodeKind::Block);
+        REQUIRE(static_cast<Block *>(Try->Body)->Statements.size() == 1);
+
+        REQUIRE(Try->CatchClauses.size() == 1);
+        auto *Catch = Try->CatchClauses[0];
+        REQUIRE(Catch->Param->Name == Ctx.getIdentifier("e"));
+        REQUIRE(Catch->Param->Type->getKind() == NodeKind::TypeRef);
+        REQUIRE(static_cast<TypeRef *>(Catch->Param->Type)->Name ==
+                Ctx.getIdentifier("Exception"));
+        REQUIRE(Catch->Param->DefaultValue == nullptr);
+        REQUIRE(Catch->Body->getKind() == NodeKind::Block);
+
+        REQUIRE(Try->Finally != nullptr);
+        REQUIRE(Try->Finally->getKind() == NodeKind::Block);
+      });
+
+  test::parseSource(
+      "fun f() -> void { try { x(); } catch (e: A) { y(); } catch (f: B) { "
+      "z(); } }",
+      [](ASTContext &Ctx, Program *P) {
+        auto *Try = static_cast<TryStmt *>(firstStmt(P));
+        REQUIRE(Try->CatchClauses.size() == 2);
+        REQUIRE(Try->CatchClauses[0]->Param->Name == Ctx.getIdentifier("e"));
+        REQUIRE(Try->CatchClauses[1]->Param->Name == Ctx.getIdentifier("f"));
+        REQUIRE(Try->Finally == nullptr);
+      });
+
+  test::parseSource("fun f() -> void { try { x(); } finally { y(); } }",
+                    [](ASTContext &, Program *P) {
+                      auto *Try = static_cast<TryStmt *>(firstStmt(P));
+                      REQUIRE(Try->CatchClauses.empty());
+                      REQUIRE(Try->Finally != nullptr);
+                    });
+
+  test::parseSource(
+      "fun f() -> void { try { try { x(); } catch (e: I) { y(); } } catch "
+      "(f: O) { z(); } }",
+      [](ASTContext &, Program *P) {
+        auto *Outer = static_cast<TryStmt *>(firstStmt(P));
+        REQUIRE(Outer->CatchClauses.size() == 1);
+        REQUIRE(Outer->Body->Statements.size() == 1);
+        REQUIRE(Outer->Body->Statements[0]->getKind() == NodeKind::TryStmt);
+        auto *Inner = static_cast<TryStmt *>(Outer->Body->Statements[0]);
+        REQUIRE(Inner->CatchClauses.size() == 1);
+        REQUIRE(Inner->Finally == nullptr);
+      });
+}
+
+TEST_CASE("Try requires catch or finally", "[statements]") {
+  test::parseSourceWithDiags(
+      "fun f() -> void { try { x(); } }", [](ASTContext &, Program *P,
+                                            basic::DiagnosticsEngine &) {
+        // The grammar requires at least one catch clause or a `finally`
+        // block, so this is a syntax error.
+        REQUIRE(P == nullptr);
+      });
+}

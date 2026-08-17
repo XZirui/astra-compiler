@@ -244,3 +244,46 @@ TEST_CASE("Dump nullsafe member access and elvis", "[dumper]") {
 )");
   });
 }
+
+TEST_CASE("Dump a try statement", "[dumper]") {
+  test::parseSource(
+      "fun f() -> void { try {} catch (e: Exception) {} finally {} }",
+      [](ASTContext &, Program *P) {
+        llvm::SmallString<256> Buf;
+        llvm::raw_svector_ostream OS(Buf);
+        dump(P, OS);
+        CHECK(OS.str() == R"(Program
+`- TopLevelObject
+  `- Decl
+    `- FunctionDecl 'f' [public]
+      |- ReturnType
+      | `- BuiltinType 'Void'
+      `- Body
+        `- Block
+          `- TryStmt
+            |- Body
+            | `- Block
+            |- CatchClause 'e'
+            | |- Param
+            | | `- Parameter 'e'
+            | |   `- Type
+            | |     `- TypeRef 'Exception'
+            | `- Body
+            |   `- Block
+            `- Finally
+              `- Block
+)");
+      });
+
+  test::parseSource(
+      "fun f() -> void { try {} catch (e: A) {} catch (g: B) {} }",
+      [](ASTContext &, Program *P) {
+        llvm::SmallString<128> Buf;
+        llvm::raw_svector_ostream OS(Buf);
+        dump(P, OS);
+        CHECK(OS.str().find("CatchClause 'e'") != llvm::StringRef::npos);
+        CHECK(OS.str().find("CatchClause 'g'") != llvm::StringRef::npos);
+        // No `finally` block was written: no slot appears.
+        CHECK(OS.str().find("Finally") == llvm::StringRef::npos);
+      });
+}

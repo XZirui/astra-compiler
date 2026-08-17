@@ -143,7 +143,7 @@ controlStatement
     | whileStmt
     | doWhileStmt
     | ifStmt
-// TODO tryStmt
+    | tryStatement
     ;
 
 forStmt
@@ -169,6 +169,14 @@ doWhileStmt
 
 ifStmt
     : IF LPAREN expression RPAREN block (ELSE (ifStmt | block))?
+    ;
+
+tryStatement
+    : TRY block (catchClause+ (FINALLY block)? | FINALLY block)
+    ;
+
+catchClause
+    : CATCH LPAREN IDENTIFIER COLON type RPAREN block
     ;
 
 exprStmt

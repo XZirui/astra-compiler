@@ -165,6 +165,8 @@ public:
   std::any visitWhileStmt(AstraParser::WhileStmtContext *Ctx) override;
   std::any visitDoWhileStmt(AstraParser::DoWhileStmtContext *Ctx) override;
   std::any visitIfStmt(AstraParser::IfStmtContext *Ctx) override;
+  std::any visitTryStatement(AstraParser::TryStatementContext *Ctx) override;
+  std::any visitCatchClause(AstraParser::CatchClauseContext *Ctx) override;
   std::any visitExprStmt(AstraParser::ExprStmtContext *Ctx) override;
 
   // --- Expressions ---

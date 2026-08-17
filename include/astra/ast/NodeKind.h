@@ -24,6 +24,7 @@ enum class NodeKind {
   ForStmt,
   ForEachStmt,
   WhileStmt,
+  TryStmt,
   DoWhileStmt,
   NullLiteral,
   BoolLiteral,
@@ -48,8 +49,9 @@ enum class NodeKind {
   ThisExpr,
   CollectionExpr,
   Label,
-  // `TypeParam` belongs to no base-class range (`Expr`/`Statement`/
-  // `Declaration`/`Type`), so it lives at the end of the enum.
+  // `TypeParam` and `CatchClause` belong to no base-class range (`Expr`/
+  // `Statement`/`Declaration`/`Type`), so they live at the end of the enum.
   TypeParam,
+  CatchClause,
 };
 } // namespace astra::ast

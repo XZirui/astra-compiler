@@ -81,6 +81,9 @@ FUN      : 'fun';
 THROW    : 'throw';
 CLASS    : 'class';
 THIS     : 'this';
+TRY      : 'try';
+CATCH    : 'catch';
+FINALLY  : 'finally';
 
 //
 // Built-in Types
